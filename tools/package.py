@@ -7,8 +7,11 @@ import shutil
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE_DIRS = ("src", "tests", "tools", "patches", "vendor", "docs")
+SOURCE_FILES = (".clang-format", ".gitignore", "LICENSE", "README.md",
+                "frontend.cmake", "engine.anyband.json.in", "full-v1.json", "upstream.json")
 
-def package(build, source, output):
+def package(build, source, output, *, runtime=None):
     build, source, output = build.resolve(), source.resolve(), output.resolve()
     # New destinations only: never replace installed engines or user data.
     output.mkdir(parents=True, exist_ok=False)
@@ -28,22 +31,30 @@ def package(build, source, output):
     if manifest["executable"].endswith(".exe"):
         candidates = sorted(Path("C:/Program Files/Microsoft Visual Studio").glob(
             "*/*/VC/Redist/MSVC/[0-9]*/x64/Microsoft.VC*.CRT"))
-        if not candidates:
+        if runtime is not None:
+            candidates = [Path(runtime)]
+        if not candidates or not list(candidates[-1].glob("*.dll")):
             raise RuntimeError("Cannot find the redistributable runtime for packaging")
         for dll in candidates[-1].glob("*.dll"):
             shutil.copy2(dll, output / dll.name)
-    # Include all owned source, even before this folder becomes a Git repository.
+    # Explicit source roots keep local backups and unrelated files out of releases.
     # Include the exact prepared engine, so rebuilding does not require a network.
     with zipfile.ZipFile(output / "source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(ROOT.rglob("*")):
+        paths = [ROOT / name for name in SOURCE_FILES]
+        for name in SOURCE_DIRS:
+            paths.extend((ROOT / name).rglob("*"))
+        for path in sorted(paths):
             rel = path.relative_to(ROOT)
-            if rel.parts[0] in ("build", "dist", ".git") or "__pycache__" in rel.parts:
+            if "__pycache__" in rel.parts or path.suffix == ".pyc":
                 continue
             if path.is_file():
                 archive.write(path, "adapter/" + rel.as_posix())
         for path in sorted(source.rglob("*")):
+            rel = path.relative_to(source)
+            if rel.parts[:2] in (("lib", "user"), ("lib", "save")) or "__pycache__" in rel.parts:
+                continue
             if path.is_file():
-                archive.write(path, "angband/" + path.relative_to(source).as_posix())
+                archive.write(path, "angband/" + rel.as_posix())
     hashes = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(output.rglob("*")) if p.is_file()}
     (output / "SHA256.json").write_text(json.dumps(hashes, indent=2) + "\n")
@@ -59,8 +70,9 @@ def package(build, source, output):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--build", type=Path, default=ROOT / "build/reduced-native")
-    parser.add_argument("--source", type=Path, default=ROOT / "build/engine-reduced")
-    parser.add_argument("--output", type=Path, default=ROOT / "dist/angband-4.2.6-reduced-windows-x64")
+    parser.add_argument("--build", type=Path, default=ROOT / "build/native")
+    parser.add_argument("--source", type=Path, default=ROOT / "build/engine")
+    parser.add_argument("--output", type=Path, default=ROOT / "dist/angband-4.2.6-windows-x64")
+    parser.add_argument("--runtime", type=Path, help="Runtime directory from the selected build toolchain")
     args = parser.parse_args()
-    package(args.build, args.source, args.output)
+    package(args.build, args.source, args.output, runtime=args.runtime)

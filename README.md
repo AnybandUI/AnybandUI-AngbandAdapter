@@ -1,86 +1,74 @@
 # AnybandUI Angband adapter
 
-This project is the canonical Angband implementation of AnybandUI's full-v1
-protocol. It owns the C adapter, vendored cJSON, engine manifest, packaging and
-engine patch series. The desktop UI is built independently in `AnybandUI`.
+An Angband-specific implementation of the [AnybandUI](https://github.com/WurliMonkhaven/AngbandDeluxe)
+`full-v1` protocol. The adapter compiles with the Angband core into one engine
+executable; the desktop UI communicates with it through JSON over stdin/stdout.
 
-The adapter is compiled into `angband-anybandui.exe` alongside the Angband core.
-It is source-version-specific: the upstream base is 4.2-release commit
-`f3082213b73f3e463e3d0d60bff4b00462beae6e`, recorded in `upstream.json`.
-All capabilities are mandatory. Saves remain in the `angband-4.2.6` family.
-
-## Current installation
-
-The locally tested build is `build/minimal-native/game`. Its executable and game
-data are installed in `../AnybandUI/build-ui-native/game/engines/angband-4.2.6`.
-Launching AnybandUI normally selects this standalone-adapter package. The old
-embedded engine and older frontend experiment were removed from discovery.
-
-The installation preserves engine identity and normal save locations. The manual
-test character remains separately in `build/manual-test-profile`; no saves were
-moved between profiles. To continue that profile, run from this directory:
-
-```powershell
-& ../AnybandUI/build-ui-native/game/AnybandUI.exe --engines-dir build/minimal-native/game --user-dir build/manual-test-profile
-```
+The supported engine base is Angband 4.2.6 at the commit pinned in `upstream.json`,
+plus the patches in `patches/series`. This is a source-level integration, not a
+DLL plugin or a stable engine ABI. The save family is `angband-4.2.6`.
 
 ## Build
 
-The sibling Angband working tree now contains the engine interfaces from the
-current patch series, with the embedded adapter removed. From a Visual Studio
-x64 developer shell in this directory:
+Requires Python 3.12+, Git, CMake and a C compiler. The tested configuration is
+Windows with the Visual Studio x64 developer shell and NMake. From this directory,
+with an Angband repository in `../angband` containing the pinned commit:
 
 ```powershell
-cmake -S ../angband -B build/external-native -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=RelWithDebInfo "-DANGBAND_EXTERNAL_FRONTEND=$PWD" -DSUPPORT_BORG=OFF -DSUPPORT_SPOIL_FRONTEND=OFF
-cmake --build build/external-native --target OurExecutable anybandui-map-tests
-Push-Location build/external-native/game
-./anybandui-map-tests.exe -v
-Pop-Location
+python -B tools/prepare.py --repository ../angband
+cmake -S build/engine -B build/native -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=RelWithDebInfo "-DANGBAND_EXTERNAL_FRONTEND=$PWD" -DSUPPORT_BORG=OFF -DSUPPORT_SPOIL_FRONTEND=OFF
+cmake --build build/native --target OurExecutable anybandui-map-tests
 ```
 
-Use a fresh build directory. The installed, manually tested executable has not
-been replaced by an untested rebuild. On a separate pristine checkout of the
-pinned upstream commit, apply the three files in `patches/series` in order first.
-`tools/prepare.py` can prepare an isolated source snapshot from a local repository;
-choose a new `--source` destination rather than reusing stale prepared sources.
+Preparation exports the pinned commit and applies the patches without changing
+the original checkout. An existing prepared tree is reused only if its recorded
+commit, patches and contents match. Choose another `--source` directory if needed.
 
-For packaging a successfully built engine, `tools/package.py` takes explicit
-`--build`, `--source` and new `--output` paths. It includes exact source, data,
-runtime libraries and notices. Install the resulting package under the UI's
-`engines/` folder. Install only one package for the same engine/save identity.
-The desktop frontend ZIP remains engine-free.
+## Run and install
 
-## Validation and limits
+Build AnybandUI separately, then point it at this engine. A separate user directory
+keeps testing apart from normal saves:
 
-On 29 September the existing binaries passed five adapter map tests and 931
-engine test cases in 83 suites. Client and GPU checks passed, and a previously
-captured adapter state rendered successfully. The user also manually verified
-actual gameplay and save/quit/relaunch/reload with this standalone engine.
-See `build/verification-20260929-standalone/REPORT.md` for recorded evidence.
+```powershell
+& ../AnybandUI/build/dev/game/AnybandUI.exe --engines-dir build/native/game --user-dir build/test-profile
+```
 
-The migrated source subsequently built cleanly using NMake in build/external-native;
-its fresh map test executable passed all five checks. The earlier Ninja configure
-attempt stalled during compiler setup. The latest complete
-live automated integration run has not been repeated: Bitdefender quarantine
-remains unresolved for several helpers and the transport/object-pile test targets.
-Do not restore or recreate quarantined tools as a workaround. `tools/verify.py`
-references unavailable helpers and is not currently a usable verification entry.
-Earlier counts in historical reports are not fresh certification of this build.
-Only Windows has been validated.
+To create a distributable engine package, including runtime libraries, game data,
+license notices and corresponding source:
 
-## Ownership
+```powershell
+python -B tools/package.py --build build/native --source build/engine --output dist/angband-4.2.6-windows-x64
+```
 
-- `src/`: current adapter and presentation policy.
-- `frontend.cmake`: external build entry and vendored JSON dependency.
-- `patches/`: engine correctness fixes, generic interfaces and external build support.
-- `full-v1.json`: copy of the frontend-owned protocol contract.
-- `tests/` and `docs/`: regression sources and architectural evidence.
-- `experiments/`: historical alternative integration prototypes, not the supported build.
+The output directory must be new. Copy the package into `engines/` beside
+`AnybandUI.exe`. Install only one package with the same engine/save identity.
+Frontend settings and engine saves live outside the installation directory.
 
-The retired embedded source, local documentation edits, old build directories and
-installed packages are preserved in `build/retired-embedded-20260929/`. They are
-outside runtime discovery and are not inputs to the current build. Historical
-`dist/` ZIPs predate this migration and must not be used as the current package.
+## Checks
 
-GPLv2; Angband files retain their licensing and cJSON retains MIT licensing.
-See LICENSE, docs/angband-copying.rst and vendor/cjson/LICENSE.
+```powershell
+Push-Location build/native/game
+./anybandui-map-tests.exe -v
+Pop-Location
+python -B -m unittest discover -s tests -p "test_*.py"
+```
+
+Check printed native pass totals as well as exit status. See
+[validation](docs/validation.md) for coverage and outstanding integration checks.
+
+## Layout
+
+- `src/`: adapter implementation and presentation policy.
+- `frontend.cmake`: external frontend build entry.
+- `patches/`: engine fixes, interfaces and generic build integration.
+- `full-v1.json`: copy of the frontend-owned contract.
+- `vendor/`: pinned cJSON dependency and license.
+- `tests/`: native map and packaging regression tests.
+- `tools/`: source preparation, patch export and packaging.
+
+[Architecture](docs/architecture.md) describes ownership and engine dependencies.
+Retired prototypes and historical cleanup reports remain in Git history; they are
+not part of the supported build. Build output and recovery backups are ignored.
+
+GPLv2. Angband retains its licensing; cJSON is MIT-licensed. See `LICENSE`,
+`docs/angband-copying.rst` and `vendor/cjson/LICENSE`.

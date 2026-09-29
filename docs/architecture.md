@@ -1,107 +1,64 @@
-# Architecture and upstream boundaries
+# Architecture
 
 ```text
-AnybandUI application (unchanged full-v1 consumer)
-               | versioned JSON over stdin/stdout
-Engine process | no DLL loading or memory inspection
-  external adapter: wire messages, identity, revisions, native presentation,
-                    tuning, artwork policy, journal, keybindings, packaging
-               | Angband-specific source interface
-  Angband: rules, RNG, knowledge, legal actions, existing command/input/event APIs
+AnybandUI desktop application
+    | full-v1 JSON requests, snapshots and events over stdin/stdout
+Engine process
+    adapter: protocol, input presentation, revisions, map records and feedback
+    | Angband C functions, callbacks and events
+    Angband: gameplay rules, RNG, knowledge, legal actions and saves
 ```
 
-The interface between adapter and Angband is a source-level integration compiled
-against a pinned engine revision. It is not a stable binary ABI or a protocol the
-Angband maintainers must adopt. A future engine release can require adapter work;
-that work stays here. The frontend protocol and complete capability requirement
-are unchanged. The same engine/save identifiers preserve existing compatibility.
+## Build and state ownership
 
-## Reductions implemented
+`frontend.cmake` is included through Angband's `ANGBAND_EXTERNAL_FRONTEND` option.
+It adds the adapter entry point and vendored cJSON to the engine build, then stages
+its manifest and game data. Ordinary platform frontends use separate builds.
 
-Inventory and equipment presentation callbacks are installed through the existing
-public command table. The engine's keymap expansion, menus, command prerequisites
-and normal item action paths remain in charge. When the existing native-browser
-negotiation is disabled, the original functions still run. No new fallback or
-reduced integration mode was introduced.
+`src/main-anybandui.c` includes private feature headers in one compilation unit.
+Those headers share session state; they are not public interfaces. Engine access
+runs synchronously on the main game thread at input boundaries. One process owns
+one game session. The UI receives scalar snapshots and identifiers, never pointers.
+Request revisions, prompt contexts and item handles reject stale interactions.
 
-Rest prompt context is attached by wrapping the existing rest command callback,
-which still parses and validates the response. Direction context wraps the
-existing direction-input callback. This removes core-only state that described
-the adapter's presentation, without duplicating movement or rest rules.
+The engine interface is source-version-specific. Updates to the pinned Angband
+revision require reviewing both adapter dependencies and the engine patch series.
+The independently versioned full-v1 protocol belongs to AnybandUI; every listed
+capability is required.
 
-Artwork import filtering lives in the adapter. The engine exposes its existing
-preference parser factory; the adapter admits artwork directives and constrained
-includes, while the real parser retains conditional expressions and visual
-mapping interpretation. It does not import commands, inscriptions, colours or
-window flags into a presentation query. A regression exercises contaminated
-artwork preferences and verifies keybindings and gameplay state are unchanged.
+## Input and presentation
 
-The external build entry point is generic: `ANGBAND_EXTERNAL_FRONTEND` names a
-directory with `frontend.cmake`. Angband supplies its executable/core targets;
-the frontend adds its entry point, dependencies and staging. Ordinary platform
-frontends remain separate builds. There is no AnybandUI name, cJSON dependency,
-manifest or network fetch in the upstream patch. The adapter vendors its small
-JSON dependency for reproducible offline builds.
+Inventory, equipment and rest commands wrap the existing command table. Birth,
+spells, item selection and other prompts use synchronous callbacks. Stores invoke
+the existing menu action handler, retaining engine pricing and bookkeeping.
+World-coordinate mouse events go through the ordinary movement/targeting paths.
+Original terminal screens remain available for interactions still using them.
 
-## Engine changes deliberately retained
+The engine supplies known grid data and terrain, trap, object and actor drawing
+layers. The adapter assembles its map records. Read-only camera queries must not
+reveal unknown information, update memory or consume gameplay RNG. Artwork imports
+are restricted to presentation directives while reusing the engine preference parser.
 
-Read-only known-map queries prevent hidden-information disclosure and gameplay
-RNG consumption. Presentation observation preserves actual terminal visuals,
-including hallucination, rather than deriving them from a second rules engine.
-Structured descriptions and character rows reuse existing engine calculations.
-Object inspection exposes its existing numerical helpers and prose section
-boundaries; the adapter owns titles, combat rows and JSON layout. Level-feeling
-strings stay engine-owned, while joining them into frontend text lives outboard.
-Store sessions receive the existing menu and invoke its original action handler,
-including stock selection, purchase/sale and bookkeeping. The adapter supplies
-the chosen row after delayed input flushing and formats confirmation text from
-the engine-computed price.
-Birth and spell browsing have direct callers outside the general command table,
-so their substitution hooks remain. World-coordinate mouse input uses the ordinary event path with an explicit
-coordinate-space flag and wider coordinates. That replaces separate click-at,
-aim-at and targeting relocation implementations. Screen-coordinate mouse events
-retain their original conversion and edge scrolling.
+Combat, projection, target selection and lifecycle events report actual outcomes.
+The adapter pairs movement observations and assembles animation feedback, preserving
+visibility and hallucination filtering. Final snapshots alone are insufficient to
+distinguish walking from teleportation or recover projectile paths.
 
-Combat outcomes, teleportation versus movement, projection geometry, confirmed
-targets and death boundaries cannot be reliably recovered from final snapshots.
-They retain explicit observations through Angband's event system. Monster
-walking emits paired point events around the actual swap; teleport departure
-and arrival use point events at the original visibility boundaries. The adapter
-pairs movement observations and constructs animation data, including the same
-visibility and hallucination filtering. It does not infer moves from snapshots. The sound cue
-event is separate from legacy playback preference; the engine unit suite checks
-both behaviours. Quantity and effect context remain borrowed for the synchronous
-input call that needs them.
+Descriptions, character rows and equipment comparisons reuse engine calculations.
+Tuning validation temporarily publishes parser output and restores the live pointer;
+equipment comparisons also depend on careful state restoration. These operations
+are synchronous and are not thread-safe or independent of the engine version.
 
-Packing those declarations into one header would not reduce these obligations.
-Screen scraping, runtime patching, copied pricing/combat rules, and dropping
-capabilities were rejected. Replacing the complete input system or asking for a
-stable plugin ABI would be a larger upstream refactor, not a small integration.
+## Engine patches
 
-## Review series
+Apply `patches/series` in order to the commit in `upstream.json`:
 
-1. `01-correctness.patch`: wide object-power arithmetic, cleanup after cancelled
-   purchases, intended direction for confused mouse movement, MSVC UTF-8 option.
-2. `02-frontend-interface.patch`: queries, observations and remaining native
-   interaction boundaries, including sound-cue unit assertions.
-3. `03-external-build.patch`: generic external frontend build entry point.
+1. Correctness fixes: object-power arithmetic, cancelled purchase cleanup,
+   confused mouse movement and the MSVC UTF-8 option.
+2. Frontend interfaces: known-map queries, drawing observations, interaction
+   callbacks and events, including sound-cue regression coverage.
+3. Generic external-frontend build support.
 
-`tools/export_patches.py` measures the complete delta from the pinned release,
-not just the most recent change. Counts include test changes; owned adapter code
-is reported separately. A fresh archive plus strict patch application verifies
-that there is no reliance on the developer's Angband working tree.
-
-## Constraints
-
-The engine remains single-threaded. The existing tuning validator temporarily
-publishes parser output and restores it at synchronous input boundaries. The
-equipment comparison similarly relies on careful state restoration. These are
-explicit adapter dependencies; extraction does not turn them into thread-safe
-or version-independent APIs. The private implementation headers preserve the
-single translation unit's state ownership; they are not installed public headers.
-
-Upstream uses C99 in its actual CMake targets. New adapter code is formatted with
-four-column tabs, K&R function braces, spaced operators and an 80-column target.
-Existing engine code is not reformatted wholesale merely to match the adapter.
-
-The current map boundary uses generic drawing layers; see [the drawing-hook update](map-hook-report.md). The adapter owns map_visual and wire-record assembly.
+`tools/export_patches.py` regenerates this series and `docs/surface.json` from an
+explicitly prepared engine tree. Measurements compare with the pinned upstream
+release. They do not include adapter-owned implementation files.

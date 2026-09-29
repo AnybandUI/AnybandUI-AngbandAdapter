@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, default=ROOT.parent / "angband")
-    parser.add_argument("--source", type=Path, default=ROOT / "build/engine-reduced")
+    parser.add_argument("--source", type=Path, default=ROOT / "build/engine")
     args = parser.parse_args()
     lock = json.loads((ROOT / "upstream.json").read_text())
     archive = subprocess.check_output(["git", "archive", lock["commit"],

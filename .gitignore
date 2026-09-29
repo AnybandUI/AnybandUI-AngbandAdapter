@@ -1,4 +1,5 @@
 /build/
 /dist/
+/recovery/
 __pycache__/
 *.pyc

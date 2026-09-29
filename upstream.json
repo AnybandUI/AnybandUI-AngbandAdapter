@@ -1,6 +1,5 @@
 {
   "repository": "https://github.com/angband/angband.git",
   "ref": "4.2-release",
-  "commit": "f3082213b73f3e463e3d0d60bff4b00462beae6e",
-  "integration_source": "f66b91fa8437c4740243b944b2d62b8d72dbe0c6"
+  "commit": "f3082213b73f3e463e3d0d60bff4b00462beae6e"
 }

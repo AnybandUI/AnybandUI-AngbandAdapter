@@ -54,6 +54,6 @@ def prepare(repository, destination):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, default=ROOT.parent / "angband")
-    parser.add_argument("--source", type=Path, default=ROOT / "build/engine-reduced")
+    parser.add_argument("--source", type=Path, default=ROOT / "build/engine")
     args = parser.parse_args()
     print(prepare(args.repository, args.source))

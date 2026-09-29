@@ -1,4 +1,0 @@
-request 1: hello
-request 2: session.new
-request 3: birth.cancel
-PASS: session returned to host; 14 checks, 3 requests, 3 responses

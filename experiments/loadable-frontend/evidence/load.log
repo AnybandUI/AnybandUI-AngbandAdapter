@@ -1,4 +1,0 @@
-request 1: hello
-request 3: session.load
-request 29: session.close
-PASS: session returned to host; 15 checks, 3 requests, 3 responses
