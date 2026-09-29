@@ -1,6 +1,6 @@
 {
   "manifest_version": 1,
-  "profile": "full-v1",
+  "profile": "anyband-protocol",
   "engine": {
     "id": "org.angband.angband",
     "name": "Angband",

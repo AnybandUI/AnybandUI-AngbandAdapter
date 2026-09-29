@@ -9,7 +9,7 @@
   These do not launch an engine or exercise gameplay.
 - Angband's own unit targets cover engine behavior. Inspect printed pass counts:
   its runner can exit successfully despite failed assertions.
-- AnybandUI startup negotiates engine identity and full-v1 capabilities.
+- AnybandUI startup negotiates engine identity and Anyband Protocol capabilities.
   A successful handshake alone does not certify every capability.
 
 ## Recorded baseline

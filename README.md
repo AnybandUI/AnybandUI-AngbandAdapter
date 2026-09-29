@@ -1,7 +1,7 @@
 # AnybandUI Angband adapter
 
-An Angband-specific implementation of the [AnybandUI](https://github.com/AnybandUI/AnybandUI)
-`full-v1` protocol. The adapter compiles with the Angband core into one engine
+An Angband-specific implementation of [Anyband Protocol](https://github.com/AnybandUI/AnybandUI/tree/main/protocol)
+(`anyband-protocol`). The adapter compiles with the Angband core into one engine
 executable; the desktop UI communicates with it through JSON over stdin/stdout.
 
 The supported engine base is Angband 4.2.6 at the commit pinned in `upstream.json`,
@@ -61,7 +61,7 @@ Check printed native pass totals as well as exit status. See
 - `src/`: adapter implementation and presentation policy.
 - `frontend.cmake`: external frontend build entry.
 - `patches/`: engine fixes, interfaces and generic build integration.
-- `full-v1.json`: copy of the frontend-owned contract.
+- `anyband-protocol.json`: copy of the frontend-owned contract.
 - `vendor/`: pinned cJSON dependency and license.
 - `tests/`: native map and packaging regression tests.
 - `tools/`: source preparation, patch export and packaging.

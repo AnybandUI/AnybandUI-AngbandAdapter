@@ -2,7 +2,7 @@
 
 ```text
 AnybandUI desktop application
-    | full-v1 JSON requests, snapshots and events over stdin/stdout
+    | Anyband Protocol JSON requests, snapshots and events over stdin/stdout
 Engine process
     adapter: protocol, input presentation, revisions, map records and feedback
     | Angband C functions, callbacks and events
@@ -23,7 +23,7 @@ Request revisions, prompt contexts and item handles reject stale interactions.
 
 The engine interface is source-version-specific. Updates to the pinned Angband
 revision require reviewing both adapter dependencies and the engine patch series.
-The independently versioned full-v1 protocol belongs to AnybandUI; every listed
+The independently versioned Anyband Protocol belongs to AnybandUI; every listed
 capability is required.
 
 ## Input and presentation
@@ -56,8 +56,11 @@ Apply `patches/series` in order to the commit in `upstream.json`:
 1. Correctness fixes: object-power arithmetic, cancelled purchase cleanup,
    confused mouse movement and the MSVC UTF-8 option.
 2. Frontend interfaces: known-map queries, drawing observations, interaction
-   callbacks and events, including sound-cue regression coverage.
+   callbacks and events.
 3. Generic external-frontend build support.
+
+Official Angband sound support and assets are preserved. The custom AnybandUI
+sound events and playback system have been removed.
 
 `tools/export_patches.py` regenerates this series and `docs/surface.json` from an
 explicitly prepared engine tree. Measurements compare with the pinned upstream

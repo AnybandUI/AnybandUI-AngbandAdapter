@@ -9,7 +9,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIRS = ("src", "tests", "tools", "patches", "vendor", "docs")
 SOURCE_FILES = (".clang-format", ".gitignore", "LICENSE", "README.md",
-                "frontend.cmake", "engine.anyband.json.in", "full-v1.json", "upstream.json")
+                "frontend.cmake", "engine.anyband.json.in", "anyband-protocol.json", "upstream.json")
 
 def package(build, source, output, *, runtime=None):
     build, source, output = build.resolve(), source.resolve(), output.resolve()

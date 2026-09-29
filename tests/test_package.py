@@ -67,6 +67,16 @@ class PackageTests(unittest.TestCase):
             self.assertIn("release/source.zip", archive.namelist())
         self.assertIn("source.zip", json.loads((output / "SHA256.json").read_text()))
 
+    def test_official_engine_audio_assets_are_preserved(self):
+        self.write(self.source / "lib/sounds/sample.mp3", "official sound")
+        self.write(self.source / "lib/customize/sound.prf", "official sound mappings")
+        output = self.package()
+        self.assertEqual((output / "lib/sounds/sample.mp3").read_text(), "official sound")
+        self.assertEqual((output / "lib/customize/sound.prf").read_text(), "official sound mappings")
+        with zipfile.ZipFile(output / "source.zip") as archive:
+            self.assertIn("angband/lib/sounds/sample.mp3", archive.namelist())
+            self.assertIn("angband/lib/customize/sound.prf", archive.namelist())
+
     def test_existing_output_is_not_overwritten(self):
         self.write(self.output / "keep.txt", "keep me")
         with self.assertRaises(FileExistsError):

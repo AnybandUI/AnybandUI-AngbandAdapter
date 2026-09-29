@@ -220,29 +220,6 @@ static void event(const char *name, cJSON *data)
 	cJSON_AddItemToObject(r, "data", data);
 	send_json(r);
 }
-/* Sound cues are transient events, never replayed from message history. */
-static void anybandui_sound_event(game_event_type event_type,
-                                  game_event_data *data, void *user)
-{
-	const char *name = message_sound_name(data->message.type);
-	(void)event_type;
-	(void)user;
-	if (name && *name) {
-		cJSON *j = cJSON_CreateObject();
-		string(j, "name", name);
-		event("sound.play", j);
-	}
-}
-static void anybandui_target_selected(game_event_type type,
-                                      game_event_data *data, void *user)
-{
-	(void)type;
-	(void)data;
-	(void)user;
-	cJSON *j = cJSON_CreateObject();
-	string(j, "name", "target_confirmed");
-	event("sound.play", j);
-}
 static cJSON *command_list(void)
 {
 	size_t i;
@@ -1044,7 +1021,7 @@ static void pump(void)
 		        match = true;
 		if (!match) {
 			error(id, "unsupported_protocol",
-			      "This engine supports AnybandUI protocol 1.0.");
+			      "This engine supports Anyband Protocol 1.0.");
 			goto done;
 		}
 		frame_limit =
@@ -1062,7 +1039,7 @@ static void pump(void)
 		        "\"save_compatibility\":\"angband-4.2.6\"},\"capabilities\":{"
 		        "\"state.player\":1,\"state.items\":1,\"state.map\":1,\"state."
 		        "monsters\":1,\"state.messages\":1,\"commands\":1,\"prompts."
-		        "basic\":1,\"prompts.items\":1,\"spells\":1,\"audio.events\":1,"
+		        "basic\":1,\"prompts.items\":1,\"spells\":1,"
 		        "\"session.replay\":1,\"run.summary\":1,\"journal\":1,"
 		        "\"keybindings\":1,\"options\":1,\"tuning\":1,\"knowledge."
 		        "watch\":1,\"knowledge\":1,\"item.rules\":1,\"item.compare\":1,"
@@ -1073,7 +1050,7 @@ static void pump(void)
 		        "\"interaction.targeting\":1,\"interaction.route\":1,"
 		        "\"interaction.mouse\":1,\"interaction.pickup\":1,"
 		        "\"interaction.terrain\":1},\"max_frame_bytes\":1048576}");
-		cJSON_AddStringToObject(out, "profile", "full-v1");
+		cJSON_AddStringToObject(out, "profile", "anyband-protocol");
 		cJSON_SetNumberValue(cJSON_GetObjectItem(out, "max_frame_bytes"),
 		                     (double)frame_limit);
 		response(id, out);
@@ -2166,8 +2143,6 @@ int main(int argc, char **argv)
 	store_check_hook = anybandui_store_check;
 	store_interact_hook = anybandui_store_session;
 	cmd_get_hook = get_command;
-	event_add_handler(EVENT_SOUND_CUE, anybandui_sound_event, NULL);
-	event_add_handler(EVENT_TARGET_SELECTED, anybandui_target_selected, NULL);
 	event_add_handler(EVENT_COMBAT_FEEDBACK, combat_feedback, NULL);
 	event_add_handler(EVENT_MONSTER_MOVE_BEGIN, anybandui_motion_event, NULL);
 	event_add_handler(EVENT_MONSTER_MOVE_END, anybandui_motion_event, NULL);
@@ -2193,9 +2168,6 @@ int main(int argc, char **argv)
 	ready = false;
 	publish();
 	complete();
-	event_remove_handler(EVENT_SOUND_CUE, anybandui_sound_event, NULL);
-	event_remove_handler(EVENT_TARGET_SELECTED, anybandui_target_selected,
-	                     NULL);
 	anybandui_tiles_free();
 	close_graphics_modes();
 	textui_cleanup();

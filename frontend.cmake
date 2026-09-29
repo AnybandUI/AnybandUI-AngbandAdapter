@@ -8,10 +8,8 @@ target_link_libraries(${ANGBAND_FRONTEND_TARGET} PRIVATE anybandui_json)
 set_target_properties(${ANGBAND_FRONTEND_TARGET} PROPERTIES
     OUTPUT_NAME angband-anybandui C_STANDARD 99)
 if(WIN32)
-    target_compile_definitions(${ANGBAND_CORE_TARGET} PRIVATE
-        WINDOWS _CRT_SECURE_NO_WARNINGS)
-    target_compile_definitions(${ANGBAND_FRONTEND_TARGET} PRIVATE
-        WINDOWS _CRT_SECURE_NO_WARNINGS)
+    # The engine's shared unit-test objects need the same platform definitions.
+    add_compile_definitions(WINDOWS _CRT_SECURE_NO_WARNINGS)
 endif()
 configure_file("${ADAPTER_ROOT}/engine.anyband.json.in"
     "${CMAKE_BINARY_DIR}/game/engine.anyband.json" @ONLY)
