@@ -1,0 +1,1417 @@
+diff --git a/src/cave-map.c b/src/cave-map.c
+index 7b2162206..6c02d8e41 100644
+--- a/src/cave-map.c
++++ b/src/cave-map.c
+@@ -79,7 +79,8 @@
+  * into different monsters, and terrain may be objects, monsters, or stay the
+  * same.
+  */
+-void map_info(struct loc grid, struct grid_data *g)
++static void map_info_internal(struct loc grid, struct grid_data *g,
++                              bool readonly)
+ {
+ 	struct object *obj;
+ 
+@@ -87,6 +88,7 @@ void map_info(struct loc grid, struct grid_data *g)
+ 	assert(grid.y < cave->height);
+ 
+ 	/* Default "clear" values, others will be set later where appropriate. */
++	g->grid = grid;
+ 	g->first_kind = NULL;
+ 	g->trap = NULL;
+ 	g->multiple_objects = false;
+@@ -121,7 +123,7 @@ void map_info(struct loc grid, struct grid_data *g)
+ 		}
+ 
+ 		/* Remember seen feature */
+-		square_memorize(cave, grid);
++		if (!readonly) square_memorize(cave, grid);
+ 	} else if (!square_isknown(cave, grid)) {
+ 		g->f_idx = FEAT_NONE;
+ 	} else if (square_isglow(cave, grid)) {
+@@ -177,7 +179,7 @@ void map_info(struct loc grid, struct grid_data *g)
+ 	}
+ 
+ 	/* Rare random hallucination on non-outer walls */
+-	if (g->hallucinate && g->m_idx == 0 && g->first_kind == 0) {
++	if (g->hallucinate && g->m_idx == 0 && g->first_kind == 0 && !readonly) {
+ 		if (one_in_(128) && (int) g->f_idx != FEAT_PERM)
+ 			g->m_idx = 1;
+ 		else if (one_in_(128) && (int) g->f_idx != FEAT_PERM)
+@@ -193,6 +195,17 @@ void map_info(struct loc grid, struct grid_data *g)
+ 	/* All other g fields are 'flags', mostly booleans. */
+ }
+ 
++void map_info(struct loc grid, struct grid_data *g)
++{
++	map_info_internal(grid, g, false);
++}
++
++/* Presentation only: do not memorize terrain or consume gameplay randomness. */
++void map_info_readonly(struct loc grid, struct grid_data *g)
++{
++	map_info_internal(grid, g, true);
++}
++
+ 
+ /**
+  * Memorize interesting viewable object/features in the given grid
+diff --git a/src/cave.h b/src/cave.h
+index 83bb47baa..cd23ee66e 100644
+--- a/src/cave.h
++++ b/src/cave.h
+@@ -144,6 +144,7 @@ enum grid_light_level
+ };
+ 
+ struct grid_data {
++	struct loc grid;
+ 	uint32_t m_idx;			/* Monster index */
+ 	uint32_t f_idx;			/* Feature index */
+ 	struct object_kind *first_kind;	/* The kind of the first item on the grid */
+@@ -235,6 +236,7 @@ bool no_light(const struct player *p);
+ 
+ /* cave-map.c */
+ void map_info(struct loc grid, struct grid_data *g);
++void map_info_readonly(struct loc grid, struct grid_data *g);
+ void square_note_spot(struct chunk *c, struct loc grid);
+ void square_light_spot(struct chunk *c, struct loc grid);
+ void light_room(struct loc grid, bool light);
+diff --git a/src/cmd-cave.c b/src/cmd-cave.c
+index 918fc8015..d4e490608 100644
+--- a/src/cmd-cave.c
++++ b/src/cmd-cave.c
+@@ -1684,7 +1684,7 @@ void do_cmd_sleep(struct command *cmd)
+  * Keep strings at 36 or less characters to keep the
+  * combined feeling on one row.
+  */
+-static const char *obj_feeling_text[] =
++const char *const obj_feeling_text[11] =
+ {
+ 	"Looks like any other level.",
+ 	"you sense an item of wondrous power!",
+@@ -1704,7 +1704,7 @@ static const char *obj_feeling_text[] =
+  * Keep strings at 36 or less characters to keep the
+  * combined feeling on one row.
+  */
+-static const char *mon_feeling_text[] =
++const char *const mon_feeling_text[10] =
+ {
+ 	/* first string is just a place holder to 
+ 	 * maintain symmetry with obj_feeling.
+diff --git a/src/cmd-core.c b/src/cmd-core.c
+index b2ac4fcf0..d34107206 100644
+--- a/src/cmd-core.c
++++ b/src/cmd-core.c
+@@ -953,6 +953,16 @@ int cmd_get_arg_target(struct command *cmd, const char *arg, int *target)
+ /**
+  * Get a target, first from command or prompt otherwise
+  */
++int cmd_get_effect_target(struct command *cmd, const char *arg, int *target,
++                          const struct effect *effect)
++{
++	const struct effect *previous = aim_effect;
++	int result;
++	aim_effect = effect;
++	result = cmd_get_target(cmd, arg, target);
++	aim_effect = previous;
++	return result;
++}
+ int cmd_get_target(struct command *cmd, const char *arg, int *target)
+ {
+ 	if (cmd_get_arg_target(cmd, arg, target) == CMD_OK) {
+@@ -1088,7 +1098,11 @@ int cmd_get_quantity(struct command *cmd, const char *arg, int *amt, int max)
+ 	if (cmd_get_arg_number(cmd, arg, amt) == CMD_OK)
+ 		return CMD_OK;
+ 
+-	*amt = get_quantity(NULL, max);
++	{
++		struct object *obj = NULL;
++		(void) cmd_get_arg_item(cmd, "item", &obj);
++		*amt = get_quantity_for_item(NULL, max, obj);
++	}
+ 	if (*amt > 0) {
+ 		cmd_set_arg_number(cmd, arg, *amt);
+ 		return CMD_OK;
+diff --git a/src/cmd-core.h b/src/cmd-core.h
+index 0aec1e428..fc4897490 100644
+--- a/src/cmd-core.h
++++ b/src/cmd-core.h
+@@ -394,6 +394,9 @@ int cmd_get_arg_number(struct command *cmd, const char *arg, int *amt);
+  */
+ int cmd_get_direction(struct command *cmd, const char *arg, int *dir,
+ 					  bool allow_5);
++struct effect;
++int cmd_get_effect_target(struct command *cmd, const char *arg, int *target,
++                          const struct effect *effect);
+ int cmd_get_target(struct command *cmd, const char *arg, int *target);
+ int cmd_get_item(struct command *cmd, const char *arg, struct object **obj,
+ 				 const char *prompt, const char *reject, item_tester filter,
+diff --git a/src/cmd-obj.c b/src/cmd-obj.c
+index 7f1aebb09..4a8cc7807 100644
+--- a/src/cmd-obj.c
++++ b/src/cmd-obj.c
+@@ -432,7 +432,9 @@ static bool use_aux(struct command *cmd, struct object *obj, enum use use,
+ 		/* Unknown things with no obvious aim get a random direction */
+ 		if (!known_aim) {
+ 			dir = ddd[randint0(8)];
+-		} else if (cmd_get_target(cmd, "target", &dir) != CMD_OK) {
++		} else if (cmd_get_effect_target(cmd, "target", &dir,
++			(obj->activation ? obj->known->activation == obj->activation :
++			(was_aware || obj->known->effect == effect)) ? effect : NULL) != CMD_OK) {
+ 			return false;
+ 		}
+ 
+@@ -1152,7 +1154,7 @@ void do_cmd_cast(struct command *cmd)
+ 	}
+ 
+ 	if (spell_needs_aim(spell_index)) {
+-		if (cmd_get_target(cmd, "target", &dir) == CMD_OK)
++		if (cmd_get_effect_target(cmd, "target", &dir, spell->effect) == CMD_OK)
+ 			player_confuse_dir(player, &dir, false);
+ 		else
+ 			return;
+diff --git a/src/cmd-pickup.c b/src/cmd-pickup.c
+index c122ae127..1cd1bc9b5 100644
+--- a/src/cmd-pickup.c
++++ b/src/cmd-pickup.c
+@@ -267,7 +267,7 @@ static void player_pickup_aux(struct player *p, struct object *obj,
+ 		if (auto_max)
+ 			num = auto_max;
+ 		else
+-			num = get_quantity(NULL, max);
++			num = get_quantity_for_item(NULL, max, obj);
+ 		if (!num) return;
+ 		picked_up = floor_object_for_use(p, obj, num, false, &dummy);
+ 		inven_carry(p, picked_up, true, domsg);
+@@ -474,11 +474,13 @@ void do_cmd_pickup(struct command *cmd)
+  */
+ void do_cmd_autopickup(struct command *cmd)
+ {
++	event_signal(EVENT_AUTOPICKUP_BEGIN);
+ 	/* Get the obvious things */
+ 	player->upkeep->energy_use = do_autopickup(player)
+ 		* z_info->move_energy / 10;
+ 	if (player->upkeep->energy_use > z_info->move_energy)
+ 		player->upkeep->energy_use = z_info->move_energy;
++	event_signal(EVENT_AUTOPICKUP_END);
+ 
+ 	/* Look at or feel what's left */
+ 	event_signal(EVENT_SEEFLOOR);
+diff --git a/src/cmds.h b/src/cmds.h
+index 8e48662a2..f56e5d42e 100644
+--- a/src/cmds.h
++++ b/src/cmds.h
+@@ -44,6 +44,8 @@ void do_cmd_hold(struct command *cmd);
+ void do_cmd_rest(struct command *cmd);
+ void do_cmd_sleep(struct command *cmd);
+ void display_feeling(bool obj_only);
++extern const char *const obj_feeling_text[11];
++extern const char *const mon_feeling_text[10];
+ void do_cmd_feeling(void);
+ void do_cmd_mon_command(struct command *cmd);
+ 
+diff --git a/src/effect-handler-attack.c b/src/effect-handler-attack.c
+index d9fe8ee1d..8777008e0 100644
+--- a/src/effect-handler-attack.c
++++ b/src/effect-handler-attack.c
+@@ -224,6 +224,8 @@ bool effect_handler_HEAL_HP(effect_handler_context_t *context)
+ 	}
+ 
+ 	/* Gain hitpoints */
++	event_signal_combat(player->grid, "heal", MIN(num, player->mhp - player->chp),
++	                    true, true);
+ 	player->chp += num;
+ 
+ 	/* Enforce maximum */
+@@ -273,6 +275,8 @@ bool effect_handler_MON_HEAL_HP(effect_handler_context_t *context)
+ 	seen = (!player->timed[TMD_BLIND] && monster_is_visible(mon));
+ 
+ 	/* Heal some */
++	event_signal_combat(mon->grid, "heal", MIN(amount, mon->maxhp - mon->hp), false,
++	                    monster_is_visible(mon));
+ 	mon->hp += amount;
+ 
+ 	/* Fully healed */
+@@ -333,6 +337,8 @@ bool effect_handler_MON_HEAL_KIN(effect_handler_context_t *context)
+ 	seen = (!player->timed[TMD_BLIND] && monster_is_visible(mon));
+ 
+ 	/* Heal some */
++	event_signal_combat(mon->grid, "heal", MIN(amount, mon->maxhp - mon->hp), false,
++	                    monster_is_visible(mon));
+ 	mon->hp = MIN(mon->hp + amount, mon->maxhp);
+ 
+ 	if (seen) {
+diff --git a/src/effect-handler-general.c b/src/effect-handler-general.c
+index 6c9ad6b99..2ba530e8a 100644
+--- a/src/effect-handler-general.c
++++ b/src/effect-handler-general.c
+@@ -2662,6 +2662,7 @@ bool effect_handler_TELEPORT(effect_handler_context_t *context)
+ 	sound(is_player ? MSG_TELEPORT : MSG_TPOTHER);
+ 
+ 	/* Move player or monster */
++	event_signal_point(EVENT_TELEPORT, start.x, start.y);
+ 	monster_swap(start, spots->grid);
+ 	if (is_player) {
+ 		player_handle_post_move(player, true,
+@@ -2678,6 +2679,8 @@ bool effect_handler_TELEPORT(effect_handler_context_t *context)
+ 
+ 	/* Lots of updates after monster_swap */
+ 	handle_stuff(player);
++	if (!loc_eq(start, spots->grid))
++		event_signal_point(EVENT_TELEPORT, spots->grid.x, spots->grid.y);
+ 
+ 	while (spots) {
+ 		struct jumps *next = spots->next;
+@@ -2804,6 +2807,7 @@ bool effect_handler_TELEPORT_TO(effect_handler_context_t *context)
+ 	sound(MSG_TELEPORT);
+ 
+ 	/* Move player or monster */
++	event_signal_point(EVENT_TELEPORT, start.x, start.y);
+ 	monster_swap(start, land);
+ 	if (player_moves) {
+ 		player_handle_post_move(player, true,
+@@ -2820,6 +2824,8 @@ bool effect_handler_TELEPORT_TO(effect_handler_context_t *context)
+ 
+ 	/* Lots of updates after monster_swap */
+ 	handle_stuff(player);
++	if (!loc_eq(start, land))
++		event_signal_point(EVENT_TELEPORT, land.x, land.y);
+ 
+ 	return true;
+ }
+diff --git a/src/game-event.c b/src/game-event.c
+index 28bff0f9f..561024fe4 100644
+--- a/src/game-event.c
++++ b/src/game-event.c
+@@ -208,7 +208,7 @@ void event_signal_blast(game_event_type type,
+ 						bool drawing,
+ 						bool *player_sees_grid,
+ 						struct loc *blast_grid,
+-						struct loc centre)
++						struct loc centre, bool arc)
+ {
+ 	game_event_data data;
+ 	data.explosion.proj_type = proj_type;
+@@ -218,6 +218,7 @@ void event_signal_blast(game_event_type type,
+ 	data.explosion.player_sees_grid = player_sees_grid;
+ 	data.explosion.blast_grid = blast_grid;
+ 	data.explosion.centre = centre;
++	data.explosion.arc = arc;
+ 
+ 	game_event_dispatch(type, &data);
+ }
+@@ -282,3 +283,17 @@ void event_signal_tunnel(game_event_type type, int nstep, int npierce, int ndug,
+ 	data.tunnel.early = early;
+ 	game_event_dispatch(type, &data);
+ }
++
++/* Observational only: callers supply the resolved outcome; no RNG or rules.
++ */
++void event_signal_combat(struct loc grid, const char *kind, int amount,
++                         bool player, bool visible)
++{
++	game_event_data data;
++	data.combat.grid = grid;
++	data.combat.kind = kind;
++	data.combat.amount = amount;
++	data.combat.player = player;
++	data.combat.visible = visible;
++	game_event_dispatch(EVENT_COMBAT_FEEDBACK, &data);
++}
+diff --git a/src/game-event.h b/src/game-event.h
+index ef763e097..9ae2a950b 100644
+--- a/src/game-event.h
++++ b/src/game-event.h
+@@ -52,6 +52,10 @@ typedef enum game_event_type
+ 	EVENT_EXPLOSION,
+ 	EVENT_BOLT,
+ 	EVENT_MISSILE,
++	EVENT_COMBAT_FEEDBACK,
++	EVENT_MONSTER_MOVE_BEGIN,
++	EVENT_MONSTER_MOVE_END,
++	EVENT_TELEPORT,
+ 
+ 	EVENT_INVENTORY,
+ 	EVENT_EQUIPMENT,
+@@ -60,12 +64,16 @@ typedef enum game_event_type
+ 	EVENT_MONSTERTARGET,
+ 	EVENT_OBJECTTARGET,
+ 	EVENT_MESSAGE,
++	EVENT_SOUND_CUE,       /* Unfiltered sound; message.type is MSG_*. */
++	EVENT_TARGET_SELECTED, /* Successful explicit selection, not tracking. */
+ 	EVENT_SOUND,
+ 	EVENT_BELL,
+ 	EVENT_USE_STORE,
+ 	EVENT_STORECHANGED,	/* Triggered on a successful buy/retrieve or sell/drop */
+ 
+ 	EVENT_INPUT_FLUSH,
++	EVENT_AUTOPICKUP_BEGIN,
++	EVENT_AUTOPICKUP_END,
+ 	EVENT_MESSAGE_FLUSH,
+ 	EVENT_CHECK_INTERRUPT,
+ 	EVENT_REFRESH,
+@@ -107,6 +115,12 @@ typedef enum game_event_type
+ 
+ typedef union
+ {
++	struct {
++		struct loc grid;
++		const char *kind;
++		int amount;
++		bool player, visible;
++	} combat;
+ 	struct loc point;
+ 
+ 	const char *string;
+@@ -140,6 +154,7 @@ typedef union
+ 	{
+ 		int proj_type;
+ 		int num_grids;
++		bool arc; /* Cone geometry, not an explosion centered at the target. */
+ 		int *distance_to_grid;
+ 		bool drawing;
+ 		bool *player_sees_grid;
+@@ -217,6 +232,8 @@ void event_remove_handler_set(game_event_type *type, size_t n_types, game_event_
+ void event_signal_birthpoints(const int *points, const int *inc_points,
+ 	int remaining);
+ 
++void event_signal_combat(struct loc grid, const char *kind, int amount,
++                         bool player, bool visible);
+ void event_signal_point(game_event_type, int x, int y);
+ void event_signal_string(game_event_type, const char *s);
+ void event_signal_message(game_event_type type, int t, const char *s);
+@@ -229,7 +246,7 @@ void event_signal_blast(game_event_type type,
+ 						bool seen,
+ 						bool *player_sees_grid,
+ 						struct loc *blast_grid,
+-						struct loc centre);
++						struct loc centre, bool arc);
+ void event_signal_bolt(game_event_type type,
+ 					   int proj_type,
+ 					   bool drawing,
+diff --git a/src/game-input.c b/src/game-input.c
+index 263ebf06e..90cabf9be 100644
+--- a/src/game-input.c
++++ b/src/game-input.c
+@@ -26,6 +26,7 @@ int (*get_quantity_hook)(const char *prompt, int max);
+ bool (*get_check_hook)(const char *prompt);
+ bool (*get_com_hook)(const char *prompt, char *command);
+ bool (*get_rep_dir_hook)(int *dir, bool allow_none);
++const struct effect *aim_effect;
+ bool (*get_aim_dir_hook)(int *dir);
+ int (*get_spell_from_book_hook)(struct player *p, const char *verb,
+ 	struct object *book, const char *error,
+@@ -70,6 +71,16 @@ bool get_string(const char *prompt, char *buf, size_t len)
+  * \param max is the maximum value to accept
+  * \return the quantity
+  */
++const struct object *quantity_item;
++int get_quantity_for_item(const char *prompt, int max, const struct object *obj)
++{
++	const struct object *previous = quantity_item;
++	int result;
++	quantity_item = obj;
++	result = get_quantity(prompt, max);
++	quantity_item = previous;
++	return result;
++}
+ int get_quantity(const char *prompt, int max)
+ {
+ 	/* Ask the UI for it */
+diff --git a/src/game-input.h b/src/game-input.h
+index af20d1fd3..29336bfef 100644
+--- a/src/game-input.h
++++ b/src/game-input.h
+@@ -44,6 +44,8 @@ extern int (*get_quantity_hook)(const char *prompt, int max);
+ extern bool (*get_check_hook)(const char *prompt);
+ extern bool (*get_com_hook)(const char *prompt, char *command);
+ extern bool (*get_rep_dir_hook)(int *dir, bool allow_none);
++/* Borrowed effect chain, only while a known spell/device requests a target. */
++extern const struct effect *aim_effect;
+ extern bool (*get_aim_dir_hook)(int *dir);
+ extern int (*get_spell_from_book_hook)(struct player *p, const char *verb,
+ 	struct object *book, const char *error,
+@@ -68,6 +70,9 @@ extern void (*view_abilities_hook)(struct player_ability *ability_list,
+ 
+ bool get_string(const char *prompt, char *buf, size_t len);
+ int get_quantity(const char *prompt, int max);
++/* Optional presentation context; does not change quantity rules. */
++extern const struct object *quantity_item;
++int get_quantity_for_item(const char *prompt, int max, const struct object *obj);
+ bool get_check(const char *prompt);
+ bool get_com(const char *prompt, char *command);
+ bool get_rep_dir(int *dir, bool allow_none);
+diff --git a/src/init.h b/src/init.h
+index 73480e154..9d23de181 100644
+--- a/src/init.h
++++ b/src/init.h
+@@ -266,6 +266,8 @@ extern struct file_parser realm_parser;
+ extern struct file_parser shape_parser;
+ extern struct file_parser trap_parser;
+ extern struct file_parser world_parser;
++/* Reusable parser; alternate frontends may supply its run callback. */
++extern struct file_parser constants_parser;
+ 
+ errr grab_effect_data(struct parser *p, struct effect *effect);
+ extern void init_file_paths(const char *config, const char *lib, const char *data);
+diff --git a/src/message.c b/src/message.c
+index 70e93e61a..08dce49b1 100644
+--- a/src/message.c
++++ b/src/message.c
+@@ -367,6 +367,8 @@ const char *message_sound_name(int message)
+  */
+ void sound(int type)
+ {
++	/* Semantic cue, before the legacy frontend playback preference. */
++	event_signal_message(EVENT_SOUND_CUE, type, NULL);
+ 	/* No sound */
+ 	if (!OPT(player, use_sound)) return;
+ 
+diff --git a/src/mon-attack.c b/src/mon-attack.c
+index a6833138b..319d59f62 100644
+--- a/src/mon-attack.c
++++ b/src/mon-attack.c
+@@ -720,6 +720,7 @@ bool make_attack_normal(struct monster *mon, struct player *p)
+ 				/* Disturbing */
+ 				disturb(p);
+ 				msg("%s misses you.", m_name);
++				event_signal_combat(p->grid, "miss", 0, true, true);
+ 			}
+ 		}
+ 
+diff --git a/src/mon-move.c b/src/mon-move.c
+index c204fa5a6..e8cdb92ea 100644
+--- a/src/mon-move.c
++++ b/src/mon-move.c
+@@ -1360,7 +1360,9 @@ static bool monster_turn_try_push(struct monster *mon, const char *m_name,
+ 		if (kill_ok)
+ 			delete_monster(cave, new);
+ 
++		event_signal_point(EVENT_MONSTER_MOVE_BEGIN, mon->grid.x, mon->grid.y);
+ 		monster_swap(mon->grid, new);
++		event_signal_point(EVENT_MONSTER_MOVE_END, new.x, new.y);
+ 		return true;
+ 	}
+ 
+@@ -1647,7 +1649,9 @@ static void monster_turn(struct monster *mon)
+ 			did_something = monster_turn_try_push(mon, m_name, new);
+ 		} else {
+ 			/* Otherwise we can just move */
++			event_signal_point(EVENT_MONSTER_MOVE_BEGIN, mon->grid.x, mon->grid.y);
+ 			monster_swap(mon->grid, new);
++			event_signal_point(EVENT_MONSTER_MOVE_END, new.x, new.y);
+ 			did_something = true;
+ 		}
+ 
+diff --git a/src/mon-util.c b/src/mon-util.c
+index 1c8033b19..f17350114 100644
+--- a/src/mon-util.c
++++ b/src/mon-util.c
+@@ -1211,6 +1211,8 @@ bool mon_take_nonplayer_hit(int dam, struct monster *t_mon,
+ 
+ 	/* Hurt the monster */
+ 	t_mon->hp -= dam;
++	event_signal_combat(t_mon->grid, "damage", dam, false,
++	                    monster_is_visible(t_mon));
+ 
+ 	/* Dead or damaged monster */
+ 	if (t_mon->hp < 0) {
+@@ -1286,6 +1288,7 @@ bool mon_take_hit(struct monster *mon, struct player *p, int dam, bool *fear,
+ 
+ 	/* Hurt it */
+ 	mon->hp -= dam;
++	event_signal_combat(mon->grid, "damage", dam, false, monster_is_visible(mon));
+ 	if (mon->hp < 0) {
+ 		/* Deal with arena monsters */
+ 		if (p->upkeep->arena_level) {
+diff --git a/src/obj-info.c b/src/obj-info.c
+index 26c470870..61d914340 100644
+--- a/src/obj-info.c
++++ b/src/obj-info.c
+@@ -42,11 +42,6 @@
+ /**
+  * Describes the number of blows possible for given stat bonuses
+  */
+-struct blow_info {
+-	int str_plus;
+-	int dex_plus;  
+-	int centiblows;
+-};
+ 
+ /**
+  * ------------------------------------------------------------------------
+@@ -861,7 +856,7 @@ static void get_known_elements(const struct object *obj,
+  * Note that the results are meaningless if called on a fake ego object as
+  * the actual ego may have different properties.
+  */
+-static int obj_known_blows(const struct object *obj, int max_num,
++int obj_known_blows(const struct object *obj, int max_num,
+ 						   struct blow_info possible_blows[])
+ {
+ 	int str_plus, dex_plus, old_blows = 0;
+@@ -1699,7 +1694,7 @@ static bool describe_damage(textblock *tb, const struct object *obj, bool throw)
+  * the `range` in ft (or zero if not ammo), the percentage chance of breakage
+  * and whether it is too heavy to be wielded effectively at the moment.
+  */
+-static void obj_known_misc_combat(const struct object *obj, bool *thrown_effect,
++void obj_known_misc_combat(const struct object *obj, bool *thrown_effect,
+ 								  int *range, int *break_chance, bool *heavy)
+ {
+ 	struct object *bow = equipped_item_by_slot_name(player, "shooting");
+@@ -2300,7 +2295,8 @@ static bool describe_ego(textblock *tb, const struct ego_item *ego)
+ /**
+  * Output object information
+  */
+-static textblock *object_info_out(const struct object *obj, int mode)
++textblock *object_info_sections(const struct object *obj, int mode,
++	void (*emit)(textblock *, const char *, void *), void *user)
+ {
+ 	bitflag flags[OF_SIZE];
+ 	struct element_info el_info[ELEM_MAX];
+@@ -2316,6 +2312,7 @@ static textblock *object_info_out(const struct object *obj, int mode)
+ 	/* Unaware objects get simple descriptions */
+ 	if (obj->kind != obj->known->kind) {
+ 		textblock_append(tb, "\n\nYou do not know what this is.\n");
++		if (emit) emit(tb, "knowledge", user);
+ 		return tb;
+ 	}
+ 
+@@ -2333,14 +2330,19 @@ static textblock *object_info_out(const struct object *obj, int mode)
+ 		something = true;
+ 	}
+ 
++	if (emit) emit(tb, "lore", user);
+ 	if (describe_curses(tb, obj, flags)) something = true;
++	if (emit) emit(tb, "curses", user);
+ 	if (describe_stats(tb, obj, mode)) something = true;
+ 	if (describe_slays(tb, obj)) something = true;
+ 	if (describe_brands(tb, obj)) something = true;
++	if (emit) emit(tb, "bonuses", user);
+ 	if (describe_elements(tb, el_info)) something = true;
+ 	if (describe_protects(tb, flags)) something = true;
++	if (emit) emit(tb, "resistances", user);
+ 	if (describe_ignores(tb, el_info)) something = true;
+ 	if (describe_hates(tb, el_info)) something = true;
++	if (emit) emit(tb, "durability", user);
+ 	if (describe_sustains(tb, flags)) something = true;
+ 	if (describe_misc_magic(tb, flags)) something = true;
+ 	if (describe_light(tb, obj, mode)) something = true;
+@@ -2348,6 +2350,7 @@ static textblock *object_info_out(const struct object *obj, int mode)
+ 	if (ego && describe_ego(tb, obj->ego)) something = true;
+ 	if (something) textblock_append(tb, "\n");
+ 
++	if (emit) emit(tb, "abilities", user);
+ 	/* Skip all the very specific information where we are giving general
+ 	   ego knowledge rather than for a single item - abilities can vary */
+ 	if (!ego) {
+@@ -2356,22 +2359,32 @@ static textblock *object_info_out(const struct object *obj, int mode)
+ 			textblock_append(tb, "\n");
+ 		}
+ 
++		if (emit) emit(tb, "use", user);
+ 		if (subjective && describe_combat(tb, obj)) {
+ 			something = true;
+ 			textblock_append(tb, "\n");
+ 		}
+ 
++		if (emit) emit(tb, "combat", user);
+ 		if (!terse && subjective && describe_digger(tb, obj)) something = true;
+ 	}
+ 
++	if (emit) emit(tb, "digging", user);
+ 	/* Don't append anything in terse (for chararacter dump) */
+ 	if (!something && !terse)
+ 		textblock_append(tb, "\n\nThis item does not seem to possess any special abilities.");
+ 
++	if (emit) emit(tb, "notes", user);
+ 	return tb;
+ }
+ 
+ 
++static textblock *object_info_out(const struct object *obj, int mode)
++{
++	return object_info_sections(obj, mode, NULL, NULL);
++}
++
++
+ /**
+  * Provide information on an item, including how it would affect the current
+  * player's state.
+diff --git a/src/obj-info.h b/src/obj-info.h
+index 533748b54..57ba6cd1f 100644
+--- a/src/obj-info.h
++++ b/src/obj-info.h
+@@ -35,6 +35,20 @@ typedef enum {
+ } oinfo_detail_t;
+ 
+ 
++/* Existing knowledge-limited calculations, shared with alternate views. */
++struct blow_info {
++	int str_plus;
++	int dex_plus;
++	int centiblows;
++};
++int obj_known_blows(const struct object *obj, int max_num,
++	struct blow_info possible_blows[]);
++void obj_known_misc_combat(const struct object *obj, bool *thrown_effect,
++	int *range, int *break_chance, bool *heavy);
++/* The callback observes section ends in the ordinary description. */
++textblock *object_info_sections(const struct object *obj, int mode,
++	void (*emit)(textblock *, const char *, void *), void *user);
++
+ textblock *object_info(const struct object *obj, oinfo_detail_t mode);
+ textblock *object_info_ego(struct ego_item *ego);
+ void object_info_spoil(ang_file *f, const struct object *obj, int wrap);
+diff --git a/src/player-attack.c b/src/player-attack.c
+index 85f161fb5..d447060a1 100644
+--- a/src/player-attack.c
++++ b/src/player-attack.c
+@@ -765,6 +765,7 @@ bool py_attack_real(struct player *p, struct loc grid, bool *fear)
+ 	/* If a miss, skip this hit */
+ 	if (!success) {
+ 		msgt(MSG_MISS, "You miss %s.", m_name);
++		event_signal_combat(mon->grid, "miss", 0, false, monster_is_visible(mon));
+ 
+ 		/* Small chance of bloodlust side-effects */
+ 		if (p->timed[TMD_BLOODLUST] && one_in_(50)) {
+@@ -1195,6 +1196,7 @@ static void ranged_helper(struct player *p,	struct object *obj, int dir,
+ 					}
+ 				}
+ 			}
++			if (!result.success) event_signal_combat(mon->grid,"miss",0,false,monster_is_visible(mon));
+ 			/* Stop the missile, or reduce its piercing effect */
+ 			pierce--;
+ 			if (pierce) continue;
+diff --git a/src/player-util.c b/src/player-util.c
+index 3da8c22aa..bf04f2f91 100644
+--- a/src/player-util.c
++++ b/src/player-util.c
+@@ -208,6 +208,7 @@ void take_hit(struct player *p, int dam, const char *kb_str)
+ 
+ 	/* Hurt the player */
+ 	p->chp -= dam;
++	event_signal_combat(p->grid, "damage", dam, true, true);
+ 
+ 	/* Reward COMBAT_REGEN characters with mana for their lost hitpoints
+ 	 * Unenviable task of separating what should and should not cause rage
+diff --git a/src/project-mon.c b/src/project-mon.c
+index 803894553..ac3601239 100644
+--- a/src/project-mon.c
++++ b/src/project-mon.c
+@@ -919,6 +919,9 @@ static void project_monster_handler_MON_POLY(project_monster_handler_context_t *
+ static void project_monster_handler_MON_HEAL(project_monster_handler_context_t *context)
+ {
+ 	/* Heal */
++	event_signal_combat(context->mon->grid, "heal",
++	                    MIN(context->dam, context->mon->maxhp - context->mon->hp),
++	                    false, monster_is_visible(context->mon));
+ 	context->mon->hp += context->dam;
+ 
+ 	/* No overflow */
+@@ -1055,6 +1058,7 @@ static bool project_m_monster_attack(project_monster_handler_context_t *context,
+ 
+ 	/* Hurt the monster */
+ 	mon->hp -= dam;
++	event_signal_combat(mon->grid, "damage", dam, false, monster_is_visible(mon));
+ 
+ 	/* Dead or damaged monster */
+ 	if (mon->hp < 0) {
+diff --git a/src/project.c b/src/project.c
+index 731354cf5..d614ffa88 100644
+--- a/src/project.c
++++ b/src/project.c
+@@ -913,7 +913,7 @@ bool project(struct source origin, int rad, struct loc finish,
+ 
+ 	/* Tell the UI to display the blast */
+ 	event_signal_blast(EVENT_EXPLOSION, typ, num_grids, distance_to_grid,
+-					   drawing, player_sees_grid, blast_grid, centre);
++					   drawing, player_sees_grid, blast_grid, centre, (flg & PROJECT_ARC) != 0);
+ 
+ 	/* Affect objects on every relevant grid */
+ 	if (flg & (PROJECT_ITEM)) {
+diff --git a/src/target.c b/src/target.c
+index 715020c2b..4366d8888 100644
+--- a/src/target.c
++++ b/src/target.c
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "angband.h"
++#include "game-event.h"
+ #include "cave.h"
+ #include "cmd-core.h"
+ #include "game-input.h"
+@@ -156,6 +157,7 @@ bool target_set_monster(struct monster *mon)
+ 		target_set = true;
+ 		target.midx = mon->midx;
+ 		target.grid = mon->grid;
++		event_signal(EVENT_TARGET_SELECTED);
+ 		return true;
+ 	} else if (target_fixed) {
+ 		/* If a monster has died during a spell, this maintains its grid as
+@@ -187,6 +189,7 @@ void target_set_location(int y, int x)
+ 		target_set = true;
+ 		target.midx = 0;
+ 		target.grid = grid;
++		event_signal(EVENT_TARGET_SELECTED);
+ 		return;
+ 	}
+ 
+diff --git a/src/tests/message/message.c b/src/tests/message/message.c
+index 550f9c136..3063abb56 100644
+--- a/src/tests/message/message.c
++++ b/src/tests/message/message.c
+@@ -15,6 +15,8 @@ struct test_message_event_state {
+ 	char *lastbell;
+ 	int lastmsg_type;
+ 	int lastsound_type;
++	int lastcue_type;
++	int n_cue;
+ 	int n_msg;
+ 	int n_sound;
+ 	int n_bell;
+@@ -412,6 +414,7 @@ static int test_sound(void *state) {
+ 	eq(st->n_sound, 0);
+ 	eq(st->n_bell, 0);
+ 	eq(st->n_other, 0);
++	eq(st->n_cue, 1);
+ 
+ 	player->opts.opt[OPT_use_sound] = true;
+ 	sound(MSG_MISS);
+@@ -419,6 +422,8 @@ static int test_sound(void *state) {
+ 	eq(st->n_sound, 1);
+ 	eq(st->n_bell, 0);
+ 	eq(st->n_other, 0);
++	eq(st->n_cue, 2);
++	eq(st->lastcue_type, st->lastsound_type);
+ 
+ 	ok;
+ }
+@@ -478,6 +483,7 @@ static int test_msgt(void *state)
+ 	eq(st->n_sound, 0);
+ 	eq(st->n_bell, 0);
+ 	eq(st->n_other, 0);
++	eq(st->n_cue, 1);
+ 
+ 	player->opts.opt[OPT_use_sound] = true;
+ 	msgt(MSG_WALK, "%s", expected2);
+@@ -496,6 +502,8 @@ static int test_msgt(void *state)
+ 	eq(st->n_sound, 1);
+ 	eq(st->n_bell, 0);
+ 	eq(st->n_other, 0);
++	eq(st->n_cue, 2);
++	eq(st->lastcue_type, st->lastsound_type);
+ 
+ 	ok;
+ }
+@@ -605,6 +613,11 @@ static void message_test_event_handler(game_event_type type,
+ 		}
+ 		break;
+ 
++	case EVENT_SOUND_CUE:
++		++st->n_cue;
++		st->lastcue_type = data->message.type;
++		break;
++
+ 	case EVENT_SOUND:
+ 		++st->n_sound;
+ 		st->lastsound_type = data->message.type;
+@@ -637,6 +650,8 @@ static void reset_event_counters(struct test_message_event_state *st)
+ 	st->lastbell = NULL;
+ 	st->lastmsg_type = -1;
+ 	st->lastsound_type = -1;
++	st->lastcue_type = -1;
++	st->n_cue = 0;
+ 	st->n_msg = 0;
+ 	st->n_sound = 0;
+ 	st->n_bell = 0;
+diff --git a/src/ui-birth.c b/src/ui-birth.c
+index 375413fb6..4cd6d0f79 100644
+--- a/src/ui-birth.c
++++ b/src/ui-birth.c
+@@ -1614,8 +1614,11 @@ static enum birth_stage get_confirm_command(void)
+  * We're imposing a step-based system onto the main game here, so we need
+  * to keep track of where we're up to, where each step moves on to, etc.
+  */
++int (*birth_interact_hook)(void);
+ int textui_do_birth(void)
+ {
++	if (birth_interact_hook)
++		return birth_interact_hook();
+ 	enum birth_stage current_stage = BIRTH_RESET;
+ 	enum birth_stage prev = BIRTH_BACK;
+ 	enum birth_stage roller = BIRTH_RESET;
+diff --git a/src/ui-birth.h b/src/ui-birth.h
+index dab919714..08ab6ed72 100644
+--- a/src/ui-birth.h
++++ b/src/ui-birth.h
+@@ -21,6 +21,7 @@
+ 
+ void ui_init_birthstate_handlers(void);
+ int textui_do_birth(void);
++extern int (*birth_interact_hook)(void);
+ 
+ //phantom
+ extern bool arg_force_name;
+diff --git a/src/ui-death.c b/src/ui-death.c
+index 695b0cee4..22af82f08 100644
+--- a/src/ui-death.c
++++ b/src/ui-death.c
+@@ -384,6 +384,7 @@ void death_screen(void)
+ 	}
+ 
+ 	/* Tombstone/retiring */
++	event_signal(EVENT_ENTER_DEATH);
+ 	display_exit_screen();
+ 
+ 	/* Flush all input and output */
+diff --git a/src/ui-display.c b/src/ui-display.c
+index d9ce33156..da9e1ae04 100644
+--- a/src/ui-display.c
++++ b/src/ui-display.c
+@@ -2509,6 +2509,7 @@ static void new_level_display_update(game_event_type type,
+ 									 game_event_data *data, void *user)
+ {
+ 	/* Enforce illegal panel */
++	if (map_reset_hook) map_reset_hook();
+ 	Term->offset_y = z_info->dungeon_hgt;
+ 	Term->offset_x = z_info->dungeon_wid;
+ 
+diff --git a/src/ui-event.h b/src/ui-event.h
+index 9f70577b9..83ebbe9bf 100644
+--- a/src/ui-event.h
++++ b/src/ui-event.h
+@@ -208,10 +208,13 @@ static struct keypress const KEYPRESS_NULL = {
+ /**
+  * Struct holding all relevant info for mouse clicks.
+  */
++/* Mouse-only modifier: coordinates are dungeon grids, not terminal cells. */
++#define MOUSE_MOD_GRID 0x80
++
+ struct mouseclick {
+ 	ui_event_type type;
+-	uint8_t x;
+-	uint8_t y;
++	int16_t x;
++	int16_t y;
+ 	uint8_t button;
+ 	uint8_t mods;
+ };
+diff --git a/src/ui-input.c b/src/ui-input.c
+index ec19a5b12..5c75a7df0 100644
+--- a/src/ui-input.c
++++ b/src/ui-input.c
+@@ -382,6 +382,7 @@ ui_event inkey_m(void)
+ /**
+  * Flush
+  */
++bool textui_message_pending;
+ static void msg_flush(int x)
+ {
+ 	uint8_t a = COLOUR_L_BLUE;
+@@ -389,8 +390,11 @@ static void msg_flush(int x)
+ 	/* Pause for response */
+ 	Term_putstr(x, 0, -1, a, "-more-");
+ 
+-	if ((!OPT(player, auto_more)) && !keymap_auto_more)
++	if ((!OPT(player, auto_more)) && !keymap_auto_more) {
++		textui_message_pending = true;
+ 		anykey();
++		textui_message_pending = false;
++	}
+ 
+ 	/* Clear the line */
+ 	Term_erase(0, 0, 255);
+@@ -1613,6 +1617,7 @@ static bool textui_get_rep_dir(int *dp, bool allow_5)
+  * Note that "Force Target", if set, will pre-empt user interaction,
+  * if there is a usable target already set.
+  */
++bool textui_aiming;
+ static bool textui_get_aim_dir(int *dp)
+ {
+ 	/* Global direction */
+@@ -1642,7 +1647,10 @@ static bool textui_get_aim_dir(int *dp)
+ 			p = "Direction ('5' for target, '*' or <click> to re-target, Escape to cancel)? ";
+ 
+ 		/* Get a command (or Cancel) */
+-		if (!get_com_ex(p, &ke)) break;
++		textui_aiming = true;
++		bool got_direction = get_com_ex(p, &ke);
++		textui_aiming = false;
++		if (!got_direction) break;
+ 
+ 		if (ke.type == EVT_MOUSE) {
+ 			if (ke.mouse.button == 1) {
+diff --git a/src/ui-input.h b/src/ui-input.h
+index 956ef26ea..a60574174 100644
+--- a/src/ui-input.h
++++ b/src/ui-input.h
+@@ -24,6 +24,10 @@
+ #include "ui-event.h"
+ #include "ui-term.h"
+ 
++/* True only while the normal message line waits for acknowledgement. */
++extern bool textui_message_pending;
++extern bool textui_aiming;
++
+ /**
+  * Holds a generic command.  If hook is not NULL, that function
+  * will be called.  Otherwise, if cmd is not CMD_NULL, that command
+diff --git a/src/ui-keymap.c b/src/ui-keymap.c
+index d932327e0..7982ff4e6 100644
+--- a/src/ui-keymap.c
++++ b/src/ui-keymap.c
+@@ -57,6 +57,14 @@ static struct keymap *keymaps[KEYMAP_MODE_MAX];
+ /**
+  * Find a keymap, given a keypress.
+  */
++bool keymap_is_user(int mode, struct keypress trigger)
++{
++	struct keymap *k;
++	for (k = keymaps[mode]; k; k = k->next)
++		if (k->key.code == trigger.code && k->key.mods == trigger.mods)
++			return k->user;
++	return false;
++}
+ const struct keypress *keymap_find(int keymap, struct keypress kc)
+ {
+ 	struct keymap *k;
+diff --git a/src/ui-keymap.h b/src/ui-keymap.h
+index 351d0bfa0..384414d0c 100644
+--- a/src/ui-keymap.h
++++ b/src/ui-keymap.h
+@@ -55,6 +55,8 @@ bool keymap_remove(int keymap, struct keypress trigger);
+  * Free all keymaps.
+  */
+ void keymap_free(void);
++/* Read-only provenance for clients which temporarily overlay bindings. */
++bool keymap_is_user(int mode, struct keypress trigger);
+ 
+ /**
+  * Save keymaps to the specified file.
+diff --git a/src/ui-map.c b/src/ui-map.c
+index 18393d591..625e9e5b2 100644
+--- a/src/ui-map.c
++++ b/src/ui-map.c
+@@ -172,8 +172,10 @@ static void grid_get_attr(struct grid_data *g, int *a)
+  * This will probably be done outside of the current text->graphics mappings
+  * though.
+  */
+-void grid_data_as_text(struct grid_data *g, int *ap, wchar_t *cp, int *tap,
+-					   wchar_t *tcp)
++void grid_data_as_text_layers(struct grid_data *g, int *ap, wchar_t *cp,
++	int *tap, wchar_t *tcp,
++	struct grid_layer layers[MAP_LAYER_MAX],
++	unsigned presentation_seed)
+ {
+ 	struct feature *feat = &f_info[g->f_idx];
+ 
+@@ -195,6 +197,11 @@ void grid_data_as_text(struct grid_data *g, int *ap, wchar_t *cp, int *tap,
+ 	    skip_objects = get_trap_graphics(cave, g, &a, &c);
+ 	}
+ 
++	if (layers && g->trap && !g->hallucinate) {
++		layers[MAP_TRAP].attr = a;
++		layers[MAP_TRAP].chr = c;
++	}
++
+ 	if (!skip_objects) {
+ 		/* If there's an object, deal with that. */
+ 		if (g->unseen_money) {
+@@ -212,7 +219,10 @@ void grid_data_as_text(struct grid_data *g, int *ap, wchar_t *cp, int *tap,
+ 		} else if (g->first_kind) {
+ 			if (g->hallucinate) {
+ 				/* Just pick a random object to display. */
+-				hallucinatory_object(&a, &c);
++				if (presentation_seed) {
++					a = 1 + presentation_seed % 15;
++					c = L"!?=/|)["[presentation_seed % 7];
++				} else hallucinatory_object(&a, &c);
+ 			} else if (g->multiple_objects) {
+ 				/* Get the "pile" feature instead */
+ 				a = object_kind_attr(pile_kind);
+@@ -225,11 +235,20 @@ void grid_data_as_text(struct grid_data *g, int *ap, wchar_t *cp, int *tap,
+ 		}
+ 	}
+ 
++	if (layers && !skip_objects &&
++			(g->first_kind || g->unseen_money || g->unseen_object)) {
++		layers[MAP_OBJECT].attr = a;
++		layers[MAP_OBJECT].chr = c;
++	}
++
+ 	/* Handle monsters, the player and trap borders */
+ 	if (g->m_idx > 0) {
+ 		if (g->hallucinate) {
+ 			/* Just pick a random monster to display. */
+-			hallucinatory_monster(&a, &c);
++			if (presentation_seed) {
++				a = 1 + presentation_seed % 15;
++				c = L'a' + presentation_seed % 26;
++			} else hallucinatory_monster(&a, &c);
+ 		} else if (!monster_is_camouflaged(cave_monster(cave, g->m_idx)))	{
+ 			struct monster *mon = cave_monster(cave, g->m_idx);
+ 
+@@ -277,7 +296,7 @@ void grid_data_as_text(struct grid_data *g, int *ap, wchar_t *cp, int *tap,
+ 			}
+ 
+ 			/* Store the drawing attr so we can use it elsewhere */
+-			mon->attr = a;
++			if (!presentation_seed) mon->attr = a;
+ 		}
+ 	} else if (g->is_player) {
+ 		struct monster_race *race = &r_info[0];
+@@ -330,12 +349,32 @@ void grid_data_as_text(struct grid_data *g, int *ap, wchar_t *cp, int *tap,
+ 		c = monster_x_char[race->ridx];
+ 	}
+ 
++	if (layers) {
++		layers[MAP_TERRAIN].attr = *tap;
++		layers[MAP_TERRAIN].chr = *tcp;
++		if (g->is_player || (g->m_idx && (g->hallucinate ||
++				!monster_is_camouflaged(cave_monster(cave, g->m_idx))))) {
++			layers[MAP_ACTOR].attr = a;
++			layers[MAP_ACTOR].chr = c;
++		}
++	}
+ 	/* Result */
+ 	(*ap) = a;
+ 	(*cp) = c;
+ }
+ 
+ 
++void (*map_draw_hook)(const struct grid_data *, const struct grid_layer *);
++void (*map_reset_hook)(void);
++void grid_data_as_text(struct grid_data *g, int *a, wchar_t *c, int *ta,
++                       wchar_t *tc)
++{
++	struct grid_layer layers[MAP_LAYER_MAX] = {{0}};
++	grid_data_as_text_layers(g, a, c, ta, tc, map_draw_hook ? layers : NULL, 0);
++	if (map_draw_hook)
++		map_draw_hook(g, layers);
++}
++
+ /**
+  * Get dimensions of a small-scale map (i.e. display_map()'s result).
+  * \param t Is the terminal displaying the map.
+@@ -834,7 +873,7 @@ void display_map(int *cy, int *cx)
+ 			if (mp[row][col] < tp) {
+ 				/* Hack - make every grid on the map lit */
+ 				g.lighting = LIGHTING_LIT;
+-				grid_data_as_text(&g, &a, &c, &ta, &tc);
++				grid_data_as_text_layers(&g, &a, &c, &ta, &tc, NULL, 0);
+ 
+ 				Term_queue_char(Term, col + 1, row + 1, a, c, ta, tc);
+ 
+@@ -863,7 +902,7 @@ void display_map(int *cy, int *cx)
+ 	/* Get the terrain at the player's spot. */
+ 	map_info(player->grid, &g);
+ 	g.lighting = LIGHTING_LIT;
+-	grid_data_as_text(&g, &a, &c, &ta, &tc);
++	grid_data_as_text_layers(&g, &a, &c, &ta, &tc, NULL, 0);
+ 
+ 	/* Get the "player" tile */
+ 	a = monster_x_attr[race->ridx];
+diff --git a/src/ui-map.h b/src/ui-map.h
+index c69327466..48cbfd853 100644
+--- a/src/ui-map.h
++++ b/src/ui-map.h
+@@ -23,3 +23,17 @@ extern void print_rel(wchar_t c, uint8_t a, int y, int x);
+ extern void prt_map(void);
+ extern void display_map(int *cy, int *cx);
+ extern void do_cmd_view_map(void);
++
++/* Ordered drawing layers, before occlusion by objects and actors. */
++enum map_layer { MAP_TERRAIN, MAP_TRAP, MAP_OBJECT, MAP_ACTOR, MAP_LAYER_MAX };
++struct grid_layer {
++	int attr;
++	wchar_t chr;
++};
++extern void (*map_draw_hook)(const struct grid_data *, const struct grid_layer *);
++extern void (*map_reset_hook)(void);
++
++/* A nonzero seed renders without changing gameplay RNG or monster colours.
++ * The caller must zero the layer array before use; absent layers stay zero. */
++extern void grid_data_as_text_layers(struct grid_data *g, int *a, wchar_t *c,
++    int *ta, wchar_t *tc, struct grid_layer layers[MAP_LAYER_MAX], unsigned seed);
+diff --git a/src/ui-player.c b/src/ui-player.c
+index b6235b17e..3033e4fac 100644
+--- a/src/ui-player.c
++++ b/src/ui-player.c
+@@ -853,6 +853,26 @@ static const struct {
+ 	{ { 52, 9, 20, 8 }, false, get_panel_skills },
+ };
+ 
++/* Export the original panel values without drawing or advancing the game. */
++void character_sheet_rows(void (*emit)(void *, const char *, const char *,
++                                       const char *, int),
++                          void *user)
++{
++	static const char *groups[] = {"Identity", "Background", "Progression",
++	                               "Combat", "Skills"};
++	size_t i, j;
++	for (i = 0; i < N_ELEMENTS(panels); ++i) {
++		struct panel *p = panels[i].panel();
++		for (j = 0; j < p->len; ++j) {
++			const struct panel_line *line = &p->lines[j];
++			if (line->label)
++				emit(user, groups[i], line->label,
++				     (i == 0 && j == 0) ? player->full_name : line->value,
++				     line->attr);
++		}
++		panel_free(p);
++	}
++}
+ void display_player_xtra_info(void)
+ {
+ 	size_t i;
+diff --git a/src/ui-player.h b/src/ui-player.h
+index 02a16f464..b5b7ca11c 100644
+--- a/src/ui-player.h
++++ b/src/ui-player.h
+@@ -6,6 +6,8 @@
+ #ifndef UI_PLAYER_H
+ #define UI_PLAYER_H
+ 
++/* Read-only semantic rows, shared with the original character screen. */
++void character_sheet_rows(void (*emit)(void *, const char *, const char *, const char *, int), void *user);
+ void display_player_stat_info(void);
+ void display_player_xtra_info(void);
+ void display_player(int mode);
+diff --git a/src/ui-prefs.c b/src/ui-prefs.c
+index 94fca501a..8294f63cb 100644
+--- a/src/ui-prefs.c
++++ b/src/ui-prefs.c
+@@ -1126,7 +1126,7 @@ enum parser_error parse_prefs_dummy(struct parser *p)
+ 	return PARSE_ERROR_NONE;
+ }
+ 
+-static struct parser *init_parse_prefs(bool user)
++struct parser *init_parse_prefs(bool user)
+ {
+ 	struct parser *p = parser_new();
+ 	struct prefs_data *pd = mem_zalloc(sizeof *pd);
+diff --git a/src/ui-prefs.h b/src/ui-prefs.h
+index 86e9069f3..94605f4d7 100644
+--- a/src/ui-prefs.h
++++ b/src/ui-prefs.h
+@@ -70,6 +70,8 @@ void option_dump(ang_file *fff);
+ bool prefs_save(const char *path, void (*dump)(ang_file *), const char *title);
+ errr process_pref_file_command(const char *buf);
+ bool process_pref_file(const char *name, bool quiet, bool user);
++/* A caller that skips finish must free parser_priv(p), then parser_destroy(p). */
++struct parser *init_parse_prefs(bool user);
+ void reset_visuals(bool load_prefs);
+ void textui_prefs_init(void);
+ void textui_prefs_free(void);
+diff --git a/src/ui-spell.c b/src/ui-spell.c
+index 2a169aa92..86b49e9d4 100644
+--- a/src/ui-spell.c
++++ b/src/ui-spell.c
+@@ -314,10 +314,12 @@ static void spell_menu_browse(struct menu *m, const char *noun)
+ /**
+  * Browse a given book.
+  */
++void (*book_browse_hook)(const struct object *obj) = NULL;
+ void textui_book_browse(const struct object *obj)
+ {
+ 	struct menu *m;
+ 	const char *noun = player_object_to_book(player, obj)->realm->spell_noun;
++	if (book_browse_hook) { book_browse_hook(obj); return; }
+ 
+ 	m = spell_menu_new(obj, spell_okay_to_browse, true);
+ 	if (m) {
+diff --git a/src/ui-spell.h b/src/ui-spell.h
+index 1c19b18d5..e289fc0d2 100644
+--- a/src/ui-spell.h
++++ b/src/ui-spell.h
+@@ -20,6 +20,7 @@
+ #define INCLUDED_UI_SPELL_H
+ 
+ struct player;
++extern void (*book_browse_hook)(const struct object *obj);
+ 
+ void textui_book_browse(const struct object *obj);
+ void textui_spell_browse(void);
+diff --git a/src/ui-store.c b/src/ui-store.c
+index e7a1f0e68..b66b73b4e 100644
+--- a/src/ui-store.c
++++ b/src/ui-store.c
+@@ -458,10 +458,15 @@ static void store_redraw(struct store_context *ctx)
+ 	}
+ }
+ 
+-static bool store_get_check(const char *prompt)
++void (*store_interact_hook)(struct store *store, struct menu *menu);
++bool (*store_check_hook)(const char *prompt, int32_t price);
++
++static bool store_get_check(const char *prompt, int32_t price)
+ {
+ 	struct keypress ch;
+ 
++	if (store_check_hook) return store_check_hook(prompt, price);
++
+ 	/* Prompt for it */
+ 	prt(prompt, 0, 0);
+ 
+@@ -528,7 +533,7 @@ static bool store_sell(struct store_context *ctx)
+ 	}
+ 
+ 	/* Get a quantity */
+-	amt = get_quantity(NULL, obj->number);
++	amt = get_quantity_for_item(NULL, obj->number, obj);
+ 
+ 	/* Allow user abort */
+ 	if (amt <= 0) return false;
+@@ -563,8 +568,9 @@ static bool store_sell(struct store_context *ctx)
+ 			prt(format("Price: %ld", (long)price), 1, 0);
+ 
+ 		/* Confirm sale */
+-		if (!store_get_check(format("%s %s? [ESC, any other key to accept]",
+-				OPT(player, birth_no_selling) ? "Give" : "Sell", o_name))) {
++		if (!store_get_check(format("%s %s?%s",
++				OPT(player, birth_no_selling) ? "Give" : "Sell", o_name,
++				store_interact_hook ? "" : " [ESC, any other key to accept]"), price)) {
+ 			screen_load();
+ 			return false;
+ 		}
+@@ -676,7 +682,7 @@ static bool store_purchase(struct store_context *ctx, int item, bool single)
+ 				num ? format(" (you have %d)", num) : "", amt);
+ 
+ 		/* Get a quantity */
+-		amt = get_quantity(o_name, amt);
++		amt = get_quantity_for_item(o_name, amt, obj);
+ 
+ 		/* Allow user abort */
+ 		if (amt <= 0) return false;
+@@ -716,7 +722,7 @@ static bool store_purchase(struct store_context *ctx, int item, bool single)
+ 		response = store_get_check(format("Buy %s?%s %s",
+ 					o_name,
+ 					obj_can_use ? "" : " (Can't use!)",
+-					"[ESC, any other key to accept]"));
++					store_interact_hook ? "" : "[ESC, any other key to accept]"), price);
+ 
+ 		screen_load();
+ 
+@@ -1297,7 +1303,8 @@ void use_store(game_event_type type, game_event_data *data, void *user)
+ 		prt_welcome(store->owner);
+ 
+ 	/* Shopping */
+-	menu_select(&ctx.menu, 0, false);
++	if (store_interact_hook) store_interact_hook(store, &ctx.menu);
++	else menu_select(&ctx.menu, 0, false);
+ 
+ 	/* Shopping's done */
+ 	event_remove_handler(EVENT_STORECHANGED, refresh_stock, &ctx);
+diff --git a/src/ui-store.h b/src/ui-store.h
+index 69373416a..aabf08875 100644
+--- a/src/ui-store.h
++++ b/src/ui-store.h
+@@ -21,6 +21,11 @@
+ #define INCLUDED_UI_STORE_H
+ 
+ 
++struct store;
++struct menu;
++/* Optional frontend session; the menu owns the original transaction actions. */
++extern void (*store_interact_hook)(struct store *store, struct menu *menu);
++extern bool (*store_check_hook)(const char *prompt, int32_t price);
+ void textui_store_knowledge(int n);
+ void enter_store(game_event_type type, game_event_data *data, void *user);
+ void use_store(game_event_type type, game_event_data *data, void *user);
+diff --git a/src/ui-target.c b/src/ui-target.c
+index 4aa25c807..43de31e1d 100644
+--- a/src/ui-target.c
++++ b/src/ui-target.c
+@@ -1211,6 +1211,7 @@ static bool pile_has_known(const struct object *obj) {
+ 	return false;
+ }
+ 
++const struct target_ui_state *target_ui_current;
+ /**
+  * Handle "target" and "look". May be called from commands or "get_aim_dir()".
+  *
+@@ -1341,8 +1342,18 @@ bool target_set_interactive(int mode, int x, int y, bool allow_pathfinding)
+ 					player->grid.y, player->grid.x);
+ 
+ 		/* Describe and Prompt */
++		struct target_ui_state presentation = {
++			.grid = loc(x, y), .mode = mode,
++			.interesting = use_interesting_mode,
++			.can_confirm = use_interesting_mode ?
++				target_able(square_monster(cave, loc(x, y))) :
++				square_in_bounds_fully(cave, loc(x, y)),
++			.candidates = targets, .path = path_g, .path_length = path_n
++		};
++		target_ui_current = &presentation;
+ 		ui_event press = target_set_interactive_aux(y, x,
+ 				mode | (use_free_mode ? TARGET_LOOK : 0));
++		target_ui_current = NULL;
+ 
+ 		/* Remove the path */
+ 		if (path_drawn) load_path(path_n, path_g, path_char, path_attr);
+@@ -1398,14 +1409,16 @@ bool target_set_interactive(int mode, int x, int y, bool allow_pathfinding)
+ 
+ 			/* If they clicked on an edge of the map, drag the cursor further
+ 			   to trigger a panel scroll */
+-			if (press.mouse.y <= 1) {
+-				y--;
+-			} else if (press.mouse.y >= Term->hgt - 2) {
+-				y++;
+-			} else if (press.mouse.x <= COL_MAP) {
+-				x--;
+-			} else if (press.mouse.x >= Term->wid - 2) {
+-				x++;
++			if (!(press.mouse.mods & MOUSE_MOD_GRID)) {
++				if (press.mouse.y <= 1) {
++					y--;
++				} else if (press.mouse.y >= Term->hgt - 2) {
++					y++;
++				} else if (press.mouse.x <= COL_MAP) {
++					x--;
++				} else if (press.mouse.x >= Term->wid - 2) {
++					x++;
++				}
+ 			}
+ 
+ 			/* Restrict cursor to inbounds */
+diff --git a/src/ui-target.h b/src/ui-target.h
+index 0ef94bbf2..5d5e85182 100644
+--- a/src/ui-target.h
++++ b/src/ui-target.h
+@@ -21,18 +21,33 @@
+ #define UI_TARGET_H
+ 
+ #include "ui-event.h"
++#include "z-type.h"
++
++struct point_set;
++/* Valid only while the original target loop awaits input. */
++struct target_ui_state {
++	struct loc grid;
++	int mode;
++	bool interesting, can_confirm;
++	const struct point_set *candidates;
++	const struct loc *path;
++	int path_length;
++};
++extern const struct target_ui_state *target_ui_current;
+ 
+ /**
+  * Convert a "key event" into a "location" (Y)
+  */
+ #define KEY_GRID_Y(K) \
+-  ((int) (((K.mouse.y - ROW_MAP) / tile_height) + Term->offset_y))
++  ((K).mouse.mods & MOUSE_MOD_GRID ? (K).mouse.y : \
++  (int) ((((K).mouse.y - ROW_MAP) / tile_height) + Term->offset_y))
+ 
+ /**
+  * Convert a "key event" into a "location" (X)
+  */
+ #define KEY_GRID_X(K) \
+-	((int) (((K.mouse.x - COL_MAP) / tile_width) + Term->offset_x))
++	((K).mouse.mods & MOUSE_MOD_GRID ? (K).mouse.x : \
++	(int) ((((K).mouse.x - COL_MAP) / tile_width) + Term->offset_x))
+ 
+ /**
+  * Size of the array that is used for object names during targeting.

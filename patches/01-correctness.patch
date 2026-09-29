@@ -1,0 +1,51 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -160,7 +160,7 @@
+ 
+ # Global compiler settings
+ if(MSVC)
+-    add_compile_options(/W4 /utf8)
++    add_compile_options(/W4 /utf-8)
+ else()
+     add_compile_options(-Wall -Wextra -pedantic -Wno-unused-parameter)
+ endif()
+--- a/src/obj-power.c
++++ b/src/obj-power.c
+@@ -1159,7 +1159,10 @@
+ 			}
+ 		} else if (power < 0) {
+ 			if (a > 0) {
+-				if (power > INT_MIN && power >= (INT_MIN / (-power) + b) / a) {
++				/* Keep the overflow guard itself in wide arithmetic. Some
++				 * Windows optimizers rewrite division by -power using power,
++				 * which can otherwise trap on INT_MIN / -1. */
++				if (power > INT_MIN && power >= ((int64_t)INT_MIN / -(int64_t)power + b) / a) {
+ 					value = -power * (power * a - b);
+ 				} else {
+ 					value = INT_MIN;
+--- a/src/ui-context.c
++++ b/src/ui-context.c
+@@ -1048,6 +1048,9 @@
+ 	} else if (e.mouse.button == 1) {
+ 		if (player->timed[TMD_CONFUSED]) {
+ 			cmdq_push(CMD_WALK);
++			/* Supply the intended step; walking applies confusion itself. */
++			cmd_set_arg_direction(cmdq_peek(), "direction",
++					motion_dir(player->grid, loc(x, y)));
+ 		} else {
+ 			if (e.mouse.mods & KC_MOD_SHIFT) {
+ 				/* shift-click - run */
+--- a/src/ui-store.c
++++ b/src/ui-store.c
+@@ -721,7 +721,10 @@
+ 		screen_load();
+ 
+ 		/* Negative response, so give up */
+-		if (!response) return false;
++		if (!response) {
++			object_delete(NULL, NULL, &dummy);
++			return false;
++		}
+ 
+ 		cmdq_push(CMD_BUY);
+ 		cmd_set_arg_item(cmdq_peek(), "item", obj);

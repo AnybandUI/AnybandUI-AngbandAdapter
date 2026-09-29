@@ -1,0 +1,35 @@
+set(ADAPTER_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
+set(DIRECT_ROOT "${CMAKE_CURRENT_LIST_DIR}")
+add_library(anybandui_json STATIC "${ADAPTER_ROOT}/vendor/cjson/cJSON.c")
+target_include_directories(anybandui_json PUBLIC "${ADAPTER_ROOT}/vendor/cjson")
+add_library(anybandui_session STATIC "${DIRECT_ROOT}/src/main-anybandui.c")
+target_include_directories(anybandui_session PRIVATE ${ANGBAND_CORE_INCLUDE_DIRS} "${ADAPTER_ROOT}/src")
+target_link_libraries(anybandui_session PUBLIC anybandui_json)
+target_sources(${ANGBAND_FRONTEND_TARGET} PRIVATE "${DIRECT_ROOT}/src/stdio-main.c")
+target_link_libraries(${ANGBAND_FRONTEND_TARGET} PRIVATE anybandui_session)
+set_target_properties(${ANGBAND_FRONTEND_TARGET} PROPERTIES OUTPUT_NAME angband-anybandui)
+set_target_properties(anybandui_session PROPERTIES C_STANDARD 99)
+if(WIN32)
+    target_compile_definitions(${ANGBAND_CORE_TARGET} PRIVATE WINDOWS _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(anybandui_session PRIVATE WINDOWS _CRT_SECURE_NO_WARNINGS)
+endif()
+configure_file("${ADAPTER_ROOT}/engine.anyband.json.in"
+    "${CMAKE_BINARY_DIR}/game/engine.anyband.json" @ONLY)
+add_custom_command(TARGET ${ANGBAND_FRONTEND_TARGET} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/lib"
+        "$<TARGET_FILE_DIR:${ANGBAND_FRONTEND_TARGET}>/lib")
+add_executable(anybandui-session-check EXCLUDE_FROM_ALL
+    "${DIRECT_ROOT}/tests/session.c" $<TARGET_OBJECTS:OurCoreLib>)
+target_include_directories(anybandui-session-check PRIVATE ${ANGBAND_CORE_INCLUDE_DIRS})
+target_link_libraries(anybandui-session-check PRIVATE anybandui_session ${ANGBAND_CORE_LINK_LIBRARIES})
+set_target_properties(anybandui-session-check PROPERTIES C_STANDARD 99
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/game")
+if(MSVC)
+    target_compile_options(anybandui_session PRIVATE /we4013 /we4047 /we4024)
+    target_compile_options(anybandui-session-check PRIVATE /we4013 /we4047 /we4024)
+else()
+    target_compile_options(anybandui_session PRIVATE -Werror=implicit-function-declaration)
+    target_compile_options(anybandui-session-check PRIVATE -Werror=implicit-function-declaration)
+endif()
+# Optional native host integration: no process launch or engine headers in UI code.
+add_library(anybandui_engine STATIC EXCLUDE_FROM_ALL $<TARGET_OBJECTS:OurCoreLib>)

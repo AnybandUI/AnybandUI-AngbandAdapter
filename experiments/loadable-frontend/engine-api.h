@@ -1,0 +1,424 @@
+#ifndef FRONTEND_ENGINE_API_H
+#define FRONTEND_ENGINE_API_H
+#include "angband.h"
+#include "cave.h"
+#include "cmd-core.h"
+#include "game-input.h"
+#include "game-world.h"
+#include "init.h"
+#include "message.h"
+#include "monster.h"
+#include "mon-util.h"
+#include "obj-desc.h"
+#include "obj-gear.h"
+#include "obj-ignore.h"
+#include "obj-info.h"
+#include "obj-knowledge.h"
+#include "obj-pile.h"
+#include "obj-make.h"
+#include "obj-curse.h"
+#include "option.h"
+#include "obj-util.h"
+#include "obj-tval.h"
+#include "player.h"
+#include "player-history.h"
+#include "project.h"
+#include "effects.h"
+#include "player-birth.h"
+#include "ui-birth.h"
+#include "player-properties.h"
+#include "player-calcs.h"
+#include "player-path.h"
+#include "player-spell.h"
+#include "player-util.h"
+#include "player-timed.h"
+#include "store.h"
+#include "score.h"
+#include "savefile.h"
+#include "ui-store.h"
+#include "ui-command.h"
+#include "ui-context.h"
+#include "ui-display.h"
+#include "ui-game.h"
+#include "ui-init.h"
+#include "ui-input.h"
+#include "ui-object.h"
+#include "ui-options.h"
+#include "ui-keymap.h"
+#include "ui-knowledge.h"
+#include "ui-map.h"
+#include "ui-prefs.h"
+#include "grafmode.h"
+#include "ui-menu.h"
+#include "ui-spell.h"
+#include "ui-target.h"
+#include "target.h"
+#include "ui-output.h"
+#include "ui-player.h"
+#include "obj-properties.h"
+#include "obj-slays.h"
+#include "trap.h"
+#include "ui-term.h"
+#include "z-quark.h"
+#include "cmds.h"
+#include "mon-lore.h"
+struct frontend_engine_api {
+    typeof(&a_info) p_a_info;
+    typeof(&add_autoinscription) p_add_autoinscription;
+    typeof(&aim_get_direction) p_aim_get_direction;
+    typeof(&all_letters_nohjkl) p_all_letters_nohjkl;
+    typeof(&ANGBAND_DIR_GAMEDATA) p_ANGBAND_DIR_GAMEDATA;
+    typeof(&ANGBAND_DIR_SAVE) p_ANGBAND_DIR_SAVE;
+    typeof(&ANGBAND_DIR_USER) p_ANGBAND_DIR_USER;
+    typeof(&ANGBAND_SYS) p_ANGBAND_SYS;
+    typeof(&angband_term) p_angband_term;
+    typeof(&autoinscribe_ground) p_autoinscribe_ground;
+    typeof(&autoinscribe_pack) p_autoinscribe_pack;
+    typeof(&birth_interact_hook) p_birth_interact_hook;
+    typeof(&book_browse_hook) p_book_browse_hook;
+    typeof(&brands) p_brands;
+    typeof(&build_score) p_build_score;
+    typeof(&calc_bonuses) p_calc_bonuses;
+    typeof(&cave) p_cave;
+    typeof(&cave_monster) p_cave_monster;
+    typeof(&character_generated) p_character_generated;
+    typeof(&character_sheet) p_character_sheet;
+    typeof(&class_has_ability) p_class_has_ability;
+    typeof(&classes) p_classes;
+    typeof(&cleanup_angband) p_cleanup_angband;
+    typeof(&cleanup_savefile_getter) p_cleanup_savefile_getter;
+    typeof(&close_game) p_close_game;
+    typeof(&close_graphics_modes) p_close_graphics_modes;
+    typeof(&cmd_get_arg_choice) p_cmd_get_arg_choice;
+    typeof(&cmd_get_arg_item) p_cmd_get_arg_item;
+    typeof(&cmd_get_hook) p_cmd_get_hook;
+    typeof(&cmd_get_nrepeats) p_cmd_get_nrepeats;
+    typeof(&cmd_lookup) p_cmd_lookup;
+    typeof(&cmd_lookup_key) p_cmd_lookup_key;
+    typeof(&cmd_set_arg_choice) p_cmd_set_arg_choice;
+    typeof(&cmd_set_arg_direction) p_cmd_set_arg_direction;
+    typeof(&cmd_set_arg_item) p_cmd_set_arg_item;
+    typeof(&cmd_set_arg_number) p_cmd_set_arg_number;
+    typeof(&cmd_set_arg_point) p_cmd_set_arg_point;
+    typeof(&cmd_set_arg_string) p_cmd_set_arg_string;
+    typeof(&cmdq_execute) p_cmdq_execute;
+    typeof(&cmdq_peek) p_cmdq_peek;
+    typeof(&cmdq_pop) p_cmdq_pop;
+    typeof(&cmdq_push) p_cmdq_push;
+    typeof(&cmds_all) p_cmds_all;
+    typeof(&col_map) p_col_map;
+    typeof(&command_dispatch_hook) p_command_dispatch_hook;
+    typeof(&constants_parser) p_constants_parser;
+    typeof(&create_needed_dirs) p_create_needed_dirs;
+    typeof(&current_graphics_mode) p_current_graphics_mode;
+    typeof(&ddgrid) p_ddgrid;
+    typeof(&ddgrid_ddd) p_ddgrid_ddd;
+    typeof(&distance) p_distance;
+    typeof(&disturb) p_disturb;
+    typeof(&do_cmd_activate) p_do_cmd_activate;
+    typeof(&do_cmd_aim_wand) p_do_cmd_aim_wand;
+    typeof(&do_cmd_cast) p_do_cmd_cast;
+    typeof(&do_cmd_eat_food) p_do_cmd_eat_food;
+    typeof(&do_cmd_equip) p_do_cmd_equip;
+    typeof(&do_cmd_inven) p_do_cmd_inven;
+    typeof(&do_cmd_quaff_potion) p_do_cmd_quaff_potion;
+    typeof(&do_cmd_read_scroll) p_do_cmd_read_scroll;
+    typeof(&do_cmd_redraw) p_do_cmd_redraw;
+    typeof(&do_cmd_use) p_do_cmd_use;
+    typeof(&do_cmd_use_staff) p_do_cmd_use_staff;
+    typeof(&do_cmd_zap_rod) p_do_cmd_zap_rod;
+    typeof(&e_info) p_e_info;
+    typeof(&ego_ignore_toggle) p_ego_ignore_toggle;
+    typeof(&ego_is_ignored) p_ego_is_ignored;
+    typeof(&equipped_item_by_slot_name) p_equipped_item_by_slot_name;
+    typeof(&event_add_handler) p_event_add_handler;
+    typeof(&event_remove_handler) p_event_remove_handler;
+    typeof(&event_signal) p_event_signal;
+    typeof(&f_info) p_f_info;
+    typeof(&feat_x_attr) p_feat_x_attr;
+    typeof(&feat_x_char) p_feat_x_char;
+    typeof(&file_close) p_file_close;
+    typeof(&file_delete) p_file_delete;
+    typeof(&file_exists) p_file_exists;
+    typeof(&file_getl) p_file_getl;
+    typeof(&file_move) p_file_move;
+    typeof(&file_open) p_file_open;
+    typeof(&file_putf) p_file_putf;
+    typeof(&find_path) p_find_path;
+    typeof(&flag_has) p_flag_has;
+    typeof(&flavor_x_attr) p_flavor_x_attr;
+    typeof(&flavor_x_char) p_flavor_x_char;
+    typeof(&flavors) p_flavors;
+    typeof(&format) p_format;
+    typeof(&gear_to_label) p_gear_to_label;
+    typeof(&get_aim_dir_hook) p_get_aim_dir_hook;
+    typeof(&get_autoinscription) p_get_autoinscription;
+    typeof(&get_check) p_get_check;
+    typeof(&get_check_hook) p_get_check_hook;
+    typeof(&get_graphics_mode) p_get_graphics_mode;
+    typeof(&get_item) p_get_item;
+    typeof(&get_item_allow) p_get_item_allow;
+    typeof(&get_item_hook) p_get_item_hook;
+    typeof(&get_lore) p_get_lore;
+    typeof(&get_quantity_for_item) p_get_quantity_for_item;
+    typeof(&get_quantity_for_item_hook) p_get_quantity_for_item_hook;
+    typeof(&get_quantity_hook) p_get_quantity_hook;
+    typeof(&get_rep_dir_hook) p_get_rep_dir_hook;
+    typeof(&get_savefile_details) p_get_savefile_details;
+    typeof(&get_spell_from_book_hook) p_get_spell_from_book_hook;
+    typeof(&get_spell_hook) p_get_spell_hook;
+    typeof(&get_spell_info) p_get_spell_info;
+    typeof(&get_string_hook) p_get_string_hook;
+    typeof(&got_savefile) p_got_savefile;
+    typeof(&handle_stuff) p_handle_stuff;
+    typeof(&health_track) p_health_track;
+    typeof(&history_add) p_history_add;
+    typeof(&history_get_list) p_history_get_list;
+    typeof(&ignore_item_ok) p_ignore_item_ok;
+    typeof(&ignore_known_item_ok) p_ignore_known_item_ok;
+    typeof(&ignore_level) p_ignore_level;
+    typeof(&ignore_name_for_type) p_ignore_name_for_type;
+    typeof(&ignore_tval) p_ignore_tval;
+    typeof(&init_angband) p_init_angband;
+    typeof(&init_display) p_init_display;
+    typeof(&init_file_paths) p_init_file_paths;
+    typeof(&init_graphics_modes) p_init_graphics_modes;
+    typeof(&init_parse_prefs) p_init_parse_prefs;
+    typeof(&inkey_ex) p_inkey_ex;
+    typeof(&inkey_scan) p_inkey_scan;
+    typeof(&inven_carry_okay) p_inven_carry_okay;
+    typeof(&is_artifact_seen) p_is_artifact_seen;
+    typeof(&item_is_available) p_item_is_available;
+    typeof(&k_info) p_k_info;
+    typeof(&key_confirm_command) p_key_confirm_command;
+    typeof(&keymap_add) p_keymap_add;
+    typeof(&keymap_find) p_keymap_find;
+    typeof(&keymap_is_user) p_keymap_is_user;
+    typeof(&keymap_remove) p_keymap_remove;
+    typeof(&keypress_to_text) p_keypress_to_text;
+    typeof(&kind_ignore_clear) p_kind_ignore_clear;
+    typeof(&kind_is_ignored_aware) p_kind_is_ignored_aware;
+    typeof(&kind_is_ignored_unaware) p_kind_is_ignored_unaware;
+    typeof(&kind_x_attr) p_kind_x_attr;
+    typeof(&kind_x_char) p_kind_x_char;
+    typeof(&loc) p_loc;
+    typeof(&loc_diff) p_loc_diff;
+    typeof(&loc_eq) p_loc_eq;
+    typeof(&loc_sum) p_loc_sum;
+    typeof(&look_mon_desc) p_look_mon_desc;
+    typeof(&lookup_obj_property) p_lookup_obj_property;
+    typeof(&lore_append_abilities) p_lore_append_abilities;
+    typeof(&lore_append_attack) p_lore_append_attack;
+    typeof(&lore_append_awareness) p_lore_append_awareness;
+    typeof(&lore_append_drop) p_lore_append_drop;
+    typeof(&lore_append_exp) p_lore_append_exp;
+    typeof(&lore_append_flavor) p_lore_append_flavor;
+    typeof(&lore_append_friends) p_lore_append_friends;
+    typeof(&lore_append_kills) p_lore_append_kills;
+    typeof(&lore_append_movement) p_lore_append_movement;
+    typeof(&lore_append_spells) p_lore_append_spells;
+    typeof(&lore_append_toughness) p_lore_append_toughness;
+    typeof(&los) p_los;
+    typeof(&make_fake_artifact) p_make_fake_artifact;
+    typeof(&map_info_readonly) p_map_info_readonly;
+    typeof(&map_present) p_map_present;
+    typeof(&max_runes) p_max_runes;
+    typeof(&mem_alloc) p_mem_alloc;
+    typeof(&mem_free) p_mem_free;
+    typeof(&mem_zalloc) p_mem_zalloc;
+    typeof(&message_count) p_message_count;
+    typeof(&message_sound_name) p_message_sound_name;
+    typeof(&message_str) p_message_str;
+    typeof(&message_type) p_message_type;
+    typeof(&messages_num) p_messages_num;
+    typeof(&mon_feeling_text) p_mon_feeling_text;
+    typeof(&monster_flags_known) p_monster_flags_known;
+    typeof(&monster_is_camouflaged) p_monster_is_camouflaged;
+    typeof(&monster_is_obvious) p_monster_is_obvious;
+    typeof(&monster_is_visible) p_monster_is_visible;
+    typeof(&monster_race_track) p_monster_race_track;
+    typeof(&monster_x_attr) p_monster_x_attr;
+    typeof(&monster_x_char) p_monster_x_char;
+    typeof(&motion_dir) p_motion_dir;
+    typeof(&msg) p_msg;
+    typeof(&my_strcap) p_my_strcap;
+    typeof(&my_strcpy) p_my_strcpy;
+    typeof(&no_light) p_no_light;
+    typeof(&notice_stuff) p_notice_stuff;
+    typeof(&number_charging) p_number_charging;
+    typeof(&o_obj_known_damage) p_o_obj_known_damage;
+    typeof(&obj_can_browse) p_obj_can_browse;
+    typeof(&obj_can_fire) p_obj_can_fire;
+    typeof(&obj_can_takeoff) p_obj_can_takeoff;
+    typeof(&obj_can_throw) p_obj_can_throw;
+    typeof(&obj_can_wear) p_obj_can_wear;
+    typeof(&obj_feeling_text) p_obj_feeling_text;
+    typeof(&obj_is_activatable) p_obj_is_activatable;
+    typeof(&obj_is_useable) p_obj_is_useable;
+    typeof(&obj_known_blows) p_obj_known_blows;
+    typeof(&obj_known_damage) p_obj_known_damage;
+    typeof(&obj_known_misc_combat) p_obj_known_misc_combat;
+    typeof(&object_copy) p_object_copy;
+    typeof(&object_copy_amt) p_object_copy_amt;
+    typeof(&object_delete) p_object_delete;
+    typeof(&object_desc) p_object_desc;
+    typeof(&object_effect) p_object_effect;
+    typeof(&object_flavor_is_aware) p_object_flavor_is_aware;
+    typeof(&object_fully_known) p_object_fully_known;
+    typeof(&object_has_rune) p_object_has_rune;
+    typeof(&object_ignore_flavor_of) p_object_ignore_flavor_of;
+    typeof(&object_info) p_object_info;
+    typeof(&object_is_carried) p_object_is_carried;
+    typeof(&object_is_equipped) p_object_is_equipped;
+    typeof(&object_is_ignored) p_object_is_ignored;
+    typeof(&object_is_in_quiver) p_object_is_in_quiver;
+    typeof(&object_kind_attr) p_object_kind_attr;
+    typeof(&object_kind_name) p_object_kind_name;
+    typeof(&object_new) p_object_new;
+    typeof(&object_prep) p_object_prep;
+    typeof(&object_slot) p_object_slot;
+    typeof(&object_to_dam) p_object_to_dam;
+    typeof(&object_to_hit) p_object_to_hit;
+    typeof(&object_weight_one) p_object_weight_one;
+    typeof(&option_desc) p_option_desc;
+    typeof(&option_name) p_option_name;
+    typeof(&option_set) p_option_set;
+    typeof(&option_type) p_option_type;
+    typeof(&parser_destroy) p_parser_destroy;
+    typeof(&parser_parse) p_parser_parse;
+    typeof(&parser_priv) p_parser_priv;
+    typeof(&path_build) p_path_build;
+    typeof(&pathfind_direction_to) p_pathfind_direction_to;
+    typeof(&pile_contains) p_pile_contains;
+    typeof(&play_again) p_play_again;
+    typeof(&player) p_player;
+    typeof(&player_abilities) p_player_abilities;
+    typeof(&player_can_cast) p_player_can_cast;
+    typeof(&player_can_study) p_player_can_study;
+    typeof(&player_exp) p_player_exp;
+    typeof(&player_is_resting) p_player_is_resting;
+    typeof(&player_is_shapechanged) p_player_is_shapechanged;
+    typeof(&player_is_trapsafe) p_player_is_trapsafe;
+    typeof(&player_object_to_book) p_player_object_to_book;
+    typeof(&plog_aux) p_plog_aux;
+    typeof(&pre_turn_refresh) p_pre_turn_refresh;
+    typeof(&prefix) p_prefix;
+    typeof(&price_item) p_price_item;
+    typeof(&proj_idx_to_name) p_proj_idx_to_name;
+    typeof(&proj_to_attr) p_proj_to_attr;
+    typeof(&proj_to_char) p_proj_to_char;
+    typeof(&project_path) p_project_path;
+    typeof(&PY_FOOD_HUNGRY) p_PY_FOOD_HUNGRY;
+    typeof(&PY_FOOD_MAX) p_PY_FOOD_MAX;
+    typeof(&quality_values) p_quality_values;
+    typeof(&quark_str) p_quark_str;
+    typeof(&r_info) p_r_info;
+    typeof(&race_has_ability) p_race_has_ability;
+    typeof(&races) p_races;
+    typeof(&Rand_quick) p_Rand_quick;
+    typeof(&Rand_value) p_Rand_value;
+    typeof(&reinit_hook) p_reinit_hook;
+    typeof(&remove_autoinscription) p_remove_autoinscription;
+    typeof(&reset_visuals) p_reset_visuals;
+    typeof(&row_bottom_map) p_row_bottom_map;
+    typeof(&row_top_map) p_row_top_map;
+    typeof(&run_game_loop) p_run_game_loop;
+    typeof(&save_game_checked) p_save_game_checked;
+    typeof(&savefile) p_savefile;
+    typeof(&savefile_get_description) p_savefile_get_description;
+    typeof(&savefile_set_name) p_savefile_set_name;
+    typeof(&scan_items) p_scan_items;
+    typeof(&screen_save_depth) p_screen_save_depth;
+    typeof(&slays) p_slays;
+    typeof(&slot_by_name) p_slot_by_name;
+    typeof(&spell_by_index) p_spell_by_index;
+    typeof(&spell_chance) p_spell_chance;
+    typeof(&spell_needs_aim) p_spell_needs_aim;
+    typeof(&spell_okay_to_browse) p_spell_okay_to_browse;
+    typeof(&spell_okay_to_cast) p_spell_okay_to_cast;
+    typeof(&spell_okay_to_study) p_spell_okay_to_study;
+    typeof(&square) p_square;
+    typeof(&square_feat) p_square_feat;
+    typeof(&square_in_bounds) p_square_in_bounds;
+    typeof(&square_in_bounds_fully) p_square_in_bounds_fully;
+    typeof(&square_iscloseddoor) p_square_iscloseddoor;
+    typeof(&square_isdiggable) p_square_isdiggable;
+    typeof(&square_isdisarmabletrap) p_square_isdisarmabletrap;
+    typeof(&square_isdownstairs) p_square_isdownstairs;
+    typeof(&square_isdtrap) p_square_isdtrap;
+    typeof(&square_isinvis) p_square_isinvis;
+    typeof(&square_isknown) p_square_isknown;
+    typeof(&square_isopendoor) p_square_isopendoor;
+    typeof(&square_ispassable) p_square_ispassable;
+    typeof(&square_isperm) p_square_isperm;
+    typeof(&square_isprojectable) p_square_isprojectable;
+    typeof(&square_isseen) p_square_isseen;
+    typeof(&square_isupstairs) p_square_isupstairs;
+    typeof(&square_light) p_square_light;
+    typeof(&square_monster) p_square_monster;
+    typeof(&square_object) p_square_object;
+    typeof(&square_trap) p_square_trap;
+    typeof(&start_game) p_start_game;
+    typeof(&STATE) p_STATE;
+    typeof(&state_i) p_state_i;
+    typeof(&store_check_num) p_store_check_num;
+    typeof(&store_interact_hook) p_store_interact_hook;
+    typeof(&store_purchase_limit) p_store_purchase_limit;
+    typeof(&store_stock_list) p_store_stock_list;
+    typeof(&store_will_buy_tester) p_store_will_buy_tester;
+    typeof(&string_make) p_string_make;
+    typeof(&strnfmt) p_strnfmt;
+    typeof(&sustain_flag) p_sustain_flag;
+    typeof(&target_able) p_target_able;
+    typeof(&target_get) p_target_get;
+    typeof(&target_get_input) p_target_get_input;
+    typeof(&target_get_monster) p_target_get_monster;
+    typeof(&target_input_hook) p_target_input_hook;
+    typeof(&target_is_set) p_target_is_set;
+    typeof(&target_set_interactive) p_target_set_interactive;
+    typeof(&target_set_location) p_target_set_location;
+    typeof(&target_set_monster) p_target_set_monster;
+    typeof(&Term) p_Term;
+    typeof(&Term_activate) p_Term_activate;
+    typeof(&term_init) p_term_init;
+    typeof(&Term_inkey) p_Term_inkey;
+    typeof(&Term_keypress) p_Term_keypress;
+    typeof(&Term_mousepress) p_Term_mousepress;
+    typeof(&term_nuke) p_term_nuke;
+    typeof(&textblock_append) p_textblock_append;
+    typeof(&textblock_free) p_textblock_free;
+    typeof(&textblock_new) p_textblock_new;
+    typeof(&textblock_spans) p_textblock_spans;
+    typeof(&textblock_text) p_textblock_text;
+    typeof(&textui_cleanup) p_textui_cleanup;
+    typeof(&textui_cmd_rest) p_textui_cmd_rest;
+    typeof(&textui_get_cmd) p_textui_get_cmd;
+    typeof(&textui_init) p_textui_init;
+    typeof(&textui_message_pending) p_textui_message_pending;
+    typeof(&textui_process_click) p_textui_process_click;
+    typeof(&tile_height) p_tile_height;
+    typeof(&tile_width) p_tile_width;
+    typeof(&timed_effects) p_timed_effects;
+    typeof(&track_object) p_track_object;
+    typeof(&trap_x_attr) p_trap_x_attr;
+    typeof(&trap_x_char) p_trap_x_char;
+    typeof(&turn) p_turn;
+    typeof(&tval_can_have_charges) p_tval_can_have_charges;
+    typeof(&tval_find_name) p_tval_find_name;
+    typeof(&tval_is_ammo) p_tval_is_ammo;
+    typeof(&tval_is_book_k) p_tval_is_book_k;
+    typeof(&tval_is_edible) p_tval_is_edible;
+    typeof(&tval_is_melee_weapon) p_tval_is_melee_weapon;
+    typeof(&tval_is_money) p_tval_is_money;
+    typeof(&tval_is_potion) p_tval_is_potion;
+    typeof(&tval_is_rod) p_tval_is_rod;
+    typeof(&tval_is_scroll) p_tval_is_scroll;
+    typeof(&tval_is_wearable) p_tval_is_wearable;
+    typeof(&unknown_gold_kind) p_unknown_gold_kind;
+    typeof(&unknown_item_kind) p_unknown_item_kind;
+    typeof(&use_graphics) p_use_graphics;
+    typeof(&utf32_to_utf8) p_utf32_to_utf8;
+    typeof(&wield_slot) p_wield_slot;
+    typeof(&z_info) p_z_info;
+};
+#endif

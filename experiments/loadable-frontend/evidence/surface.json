@@ -1,0 +1,50 @@
+[
+  {
+    "File": "frontend-stream.h",
+    "Lines": 12
+  },
+  {
+    "File": "frontend.h",
+    "Lines": 14
+  },
+  {
+    "File": "loader.c",
+    "Lines": 38
+  },
+  {
+    "File": "engine-api.h",
+    "Lines": 424
+  },
+  {
+    "File": "engine-api.c",
+    "Lines": 360
+  },
+  {
+    "File": "export-api.h",
+    "Lines": 16
+  },
+  {
+    "File": "export-loader.c",
+    "Lines": 40
+  },
+  {
+    "File": "export-engine.ps1",
+    "Lines": 18
+  },
+  {
+    "File": "windows-main.c",
+    "Lines": 61
+  },
+  {
+    "File": "stock-win.c",
+    "Lines": 3
+  },
+  {
+    "File": "CMakeLists.txt",
+    "Lines": 107
+  },
+  {
+    "File": "build/engine.def",
+    "Lines": 2317
+  }
+]

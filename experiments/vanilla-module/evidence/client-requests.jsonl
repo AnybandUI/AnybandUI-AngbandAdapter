@@ -1,0 +1,12 @@
+{"id":"r1","kind":"request","method":"hello","params":{"max_frame_bytes":4194304,"native_equipment":true,"native_inventory":true,"protocols":[{"major":1,"minor":0}],"session_id":"session-1"}}
+{"id":"r2","kind":"request","method":"saves.list","params":{"session_id":"session-1"}}
+{"id":"r3","kind":"request","method":"commands.list","params":{"session_id":"session-1"}}
+{"id":"r4","kind":"request","method":"session.new","params":{"class":"Warrior","native_birth":true,"race":"Human","save":"NativeUI","session_id":"session-1"}}
+{"id":"r5","kind":"request","method":"catalog.get","params":{"session_id":"session-1"}}
+{"id":"r6","kind":"request","method":"birth.action","params":{"action":"accept","history":"Native client integration check.","name":"NativeUI","revision":"1","session_id":"session-1"}}
+{"id":"r7","kind":"request","method":"command.execute","params":{"command":"core.rest","item":"","revision":"2","session_id":"session-1"}}
+{"id":"r8","kind":"request","method":"prompt.reply","params":{"prompt_id":"3","session_id":"session-1","value":null}}
+{"id":"r9","kind":"request","method":"targeting.begin","params":{"context":"4","mode":"look","session_id":"session-1"}}
+{"id":"r10","kind":"request","method":"targeting.control","params":{"context":"5","operation":"cancel","session_id":"session-1"}}
+{"id":"r11","kind":"request","method":"command.execute","params":{"command":"core.hold","item":"","revision":"6","session_id":"session-1"}}
+{"id":"r12","kind":"request","method":"session.close","params":{"session_id":"session-1"}}

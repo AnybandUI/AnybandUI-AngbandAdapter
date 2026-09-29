@@ -1,0 +1,47 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -4,6 +4,9 @@
+ 
+ # Append the custom modules to the search path.
+ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/cmake/modules")
++
++set(ANGBAND_EXTERNAL_FRONTEND "" CACHE PATH
++    "Directory containing frontend.cmake for an externally maintained frontend.")
+ 
+ option(SUPPORT_GCU_FRONTEND "Support for GCU front end." OFF)
+ option(SUPPORT_NCURSES_FRONTEND "Synonym for SUPPORT_GCU_FRONTEND for backwards compatibility." OFF)
+@@ -71,7 +74,7 @@
+ endif()
+ # If none of the graphical front ends will be configured, configure the one for
+ # Windows if that's the target plaform or the X11 one for anything else.
+-if((NOT SUPPORT_GCU_FRONTEND) AND (NOT SUPPORT_SDL_FRONTEND) AND (NOT SUPPORT_SDL2_FRONTEND) AND (NOT SUPPORT_WINDOWS_FRONTEND) AND (NOT SUPPORT_X11_FRONTEND))
++if((NOT ANGBAND_EXTERNAL_FRONTEND) AND (NOT SUPPORT_GCU_FRONTEND) AND (NOT SUPPORT_SDL_FRONTEND) AND (NOT SUPPORT_SDL2_FRONTEND) AND (NOT SUPPORT_WINDOWS_FRONTEND) AND (NOT SUPPORT_X11_FRONTEND))
+     if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+         set(SUPPORT_WINDOWS_FRONTEND ON)
+     else()
+@@ -427,7 +430,7 @@
+         $<$<BOOL:${SUPPORT_STATS_FRONTEND}>:src/main-stats.c>
+         $<$<BOOL:${SUPPORT_STATS_FRONTEND}>:src/stats/db.c>
+         $<$<BOOL:${SUPPORT_TEST_FRONTEND}>:src/main-test.c>
+-        $<$<NOT:$<BOOL:${SUPPORT_WINDOWS_FRONTEND}>>:src/main.c>
++        $<$<AND:$<NOT:$<BOOL:${SUPPORT_WINDOWS_FRONTEND}>>,$<NOT:$<BOOL:${ANGBAND_EXTERNAL_FRONTEND}>>>:src/main.c>
+ )
+ 
+ set_target_properties(OurExecutable PROPERTIES
+@@ -438,6 +441,16 @@
+     ${ANGBAND_CORE_INCLUDE_DIRS}
+ )
+ target_link_libraries(OurExecutable PRIVATE ${ANGBAND_CORE_LINK_LIBRARIES})
++if(ANGBAND_EXTERNAL_FRONTEND)
++    if(SUPPORT_WINDOWS_FRONTEND OR SUPPORT_GCU_FRONTEND OR SUPPORT_SDL_FRONTEND
++            OR SUPPORT_SDL2_FRONTEND OR SUPPORT_X11_FRONTEND)
++        message(FATAL_ERROR "Build an external frontend separately from platform frontends.")
++    endif()
++    set(ANGBAND_FRONTEND_TARGET OurExecutable)
++    set(ANGBAND_CORE_TARGET OurCoreLib)
++    include("${ANGBAND_EXTERNAL_FRONTEND}/frontend.cmake")
++endif()
++
+ 
+ # Allow for some introspection:  have rules to print out names that something
+ # downstream could use.  Have the output start with "our-<something>=" so it

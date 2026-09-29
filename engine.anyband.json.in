@@ -1,0 +1,16 @@
+{
+  "manifest_version": 1,
+  "profile": "full-v1",
+  "engine": {
+    "id": "org.angband.angband",
+    "name": "Angband",
+    "version": "4.2.6-anybandui",
+    "save_compatibility": "angband-4.2.6"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "executable": "angband-anybandui@CMAKE_EXECUTABLE_SUFFIX@",
+  "data_directory": "lib"
+}

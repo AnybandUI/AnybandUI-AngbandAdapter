@@ -1,0 +1,718 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 920c537fd..ed18c5f85 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -439,6 +439,48 @@ target_include_directories(OurExecutable PRIVATE
+ )
+ target_link_libraries(OurExecutable PRIVATE ${ANGBAND_CORE_LINK_LIBRARIES})
+ 
++# Native modules use the exact engine build's existing C interfaces.
++if(SUPPORT_WINDOWS_FRONTEND AND MSVC)
++    option(SUPPORT_FRONTEND_MODULES "Load build-matched native frontends" ON)
++    if(SUPPORT_FRONTEND_MODULES)
++        target_sources(OurExecutable PRIVATE src/frontend-module.c)
++        target_compile_definitions(OurExecutable PRIVATE FRONTEND_MODULES)
++        target_include_directories(OurExecutable PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
++        set_target_properties(OurExecutable PROPERTIES
++            ENABLE_EXPORTS ON WINDOWS_EXPORT_ALL_SYMBOLS ON)
++        # CMake's automatic exports omit some public constant and tentative data.
++        get_filename_component(FRONTEND_TOOLS "${CMAKE_LINKER}" DIRECTORY)
++        file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/frontend-objects.rsp"
++            CONTENT "\"$<JOIN:$<TARGET_OBJECTS:OurCoreLib>,\"\n\">\"\n")
++        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/frontend-data.def"
++            COMMAND "${CMAKE_COMMAND}" "-DTOOLS=${FRONTEND_TOOLS}"
++                "-DROOT=${CMAKE_CURRENT_BINARY_DIR}" "-DBITS=${CMAKE_SIZEOF_VOID_P}"
++                -P "${CMAKE_CURRENT_SOURCE_DIR}/src/frontend-exports.cmake"
++            DEPENDS $<TARGET_OBJECTS:OurCoreLib> src/frontend-exports.cmake VERBATIM)
++        target_sources(OurExecutable PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/frontend-data.def")
++        file(GLOB_RECURSE FRONTEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
++            "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
++            "${CMAKE_CURRENT_SOURCE_DIR}/src/frontend-exports.cmake")
++        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FRONTEND_SOURCES})
++        set(FRONTEND_ID "")
++        foreach(setting CMAKE_C_COMPILER_ID CMAKE_C_COMPILER_VERSION
++                CMAKE_SIZEOF_VOID_P CMAKE_BUILD_TYPE CMAKE_C_FLAGS
++                CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
++                CMAKE_C_FLAGS_RELWITHDEBINFO CMAKE_C_FLAGS_MINSIZEREL
++                CMAKE_MSVC_RUNTIME_LIBRARY SUPPORT_BORG SUPPORT_BORG_HIGH_SCORES)
++            string(APPEND FRONTEND_ID "${setting}=${${setting}};")
++        endforeach()
++        foreach(source IN LISTS FRONTEND_SOURCES)
++            file(SHA256 "${source}" digest)
++            string(APPEND FRONTEND_ID "${digest}")
++        endforeach()
++        file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt" digest)
++        string(SHA256 FRONTEND_ID "${FRONTEND_ID};${digest}")
++        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/frontend-build.h"
++            "#define ANGBAND_FRONTEND_BUILD_ID \"${FRONTEND_ID}\"\n")
++    endif()
++endif()
++
+ # Allow for some introspection:  have rules to print out names that something
+ # downstream could use.  Have the output start with "our-<something>=" so it
+ # can very likely be separated from whatever other junk the build system prints
+diff --git a/configure.ac b/configure.ac
+index 17c7ec7ab..70ddde0c6 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -453,9 +453,10 @@ AS_IF([test "$enable_win" = "yes"],
+ 		[AC_MSG_ERROR([--enable-win is not compatible with --with-no-install or --with-setgid])])
+ 	AC_DEFINE(USE_WIN, 1, [Define to 1 if using the Windows interface.])
+ 	AC_DEFINE(SOUND, 1, [Define to 1 if including sound support.])
++	AC_DEFINE(FRONTEND_MODULES, 1, [Define to 1 to load build-matched native frontends.])
+ 	CPPFLAGS="${CPPFLAGS} -DWINDOWS -Iwin/include"
+ 	CFLAGS="${CFLAGS} -static"
+-	LDFLAGS="${LDFLAGS} -Lwin/lib"
++	LDFLAGS="${LDFLAGS} -Lwin/lib -Wl,--export-all-symbols"
+ 	LIBS="${LIBS} -mwindows -lwinmm -lzlib -llibpng -lmsimg32"
+ 	TEST_LIBS="${TEST_LIBS} -mwindows"
+ 	dnl Note complete replacement of all main files
+diff --git a/src/Makefile b/src/Makefile
+index 00ae932f1..3abda70e2 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -11,6 +11,9 @@ PROG    = $(PROGNAME)$(PROG_SUFFIX)
+ CFLAGS += -DHAVE_VERSION_H
+ 
+ CFLAGS += -I. -fPIC -std=c99
++ifeq ($(ENABLEWIN),yes)
++LDFLAGS += -Wl,--out-implib,lib$(PROGNAME).dll.a
++endif
+ # Replace above line with the two below and then look at gmon.out
+ # to do performance monitoring
+ # CFLAGS += -g -pg -I. -fPIC -std=c99
+@@ -24,6 +27,7 @@ GCOVS = $(OBJECTS:.o=.c.gcov)
+ # is a relic and only there to clean up an intermediate from previous versions
+ # of this Makefile.
+ CLEAN = $(PROGNAME).a $(PROGNAME).o $(ALLMAINFILES) ${ALLMAINFILES:.o=.dep} version.h
++CLEAN += frontend-build.h frontend-build.h.tmp lib$(PROGNAME).dll.a
+ DISTCLEAN = autoconf.h tests/.deps
+ 
+ $(PROG): $(PROGNAME).a $(MAINFILES)
+@@ -96,6 +100,14 @@ version.h: FORCE
+ # Since version.h is dynamically generated, explicitly specify everything that
+ # depends on it.
+ buildid.o: version.h
++frontend-module.o: frontend-build.h
++frontend-build.h: version.h FORCE
++	@{ printf '%s\n' '$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS)'; \
++		$(CC) --version; \
++		cat $(sort $(filter-out frontend-build.h,$(wildcard *.c *.h))); \
++	} | sha256sum | sed 's/^\([0-9a-f]*\).*/#define ANGBAND_FRONTEND_BUILD_ID "\1"/' > $@.tmp
++	@cmp -s $@.tmp $@ || cp $@.tmp $@
++	@rm -f $@.tmp
+ 
+ splint:
+ 	splint -f .splintrc ${OBJECTS:.o=.c} main.c main-gcu.c
+diff --git a/src/Makefile.src b/src/Makefile.src
+index cae25e554..a27b97f2c 100644
+--- a/src/Makefile.src
++++ b/src/Makefile.src
+@@ -133,6 +133,7 @@ TESTMAINFILES = main-test.o
+ WINMAINFILES = \
+         win/$(PROGNAME).res \
+         main-win.o \
++        frontend-module.o \
+         win/readdib.o \
+         win/readpng.o \
+         win/scrnshot.o \
+diff --git a/src/cmd-core.c b/src/cmd-core.c
+index b2ac4fcf0..c781769f5 100644
+--- a/src/cmd-core.c
++++ b/src/cmd-core.c
+@@ -37,6 +37,7 @@
+ #include "target.h"
+ 
+ errr (*cmd_get_hook)(cmd_context c);
++void (*command_dispatch_hook)(struct command *, void (*)(struct command *));
+ 
+ /**
+  * ------------------------------------------------------------------------
+@@ -386,7 +387,10 @@ static void process_command(cmd_context ctx, struct command *cmd)
+ 				player->skip_cmd_coercion = 1;
+ 			}
+ 		}
+-		game_cmds[idx].fn(cmd);
++		if (command_dispatch_hook)
++			command_dispatch_hook(cmd, game_cmds[idx].fn);
++		else
++			game_cmds[idx].fn(cmd);
+ 	}
+ 
+ 	/* If the command hasn't changed nrepeats, count this execution. */
+@@ -1085,10 +1089,13 @@ int cmd_get_arg_number(struct command *cmd, const char *arg, int *amt)
+  */
+ int cmd_get_quantity(struct command *cmd, const char *arg, int *amt, int max)
+ {
++	struct object *obj = NULL;
++
+ 	if (cmd_get_arg_number(cmd, arg, amt) == CMD_OK)
+ 		return CMD_OK;
+ 
+-	*amt = get_quantity(NULL, max);
++	(void) cmd_get_arg_item(cmd, "item", &obj);
++	*amt = get_quantity_for_item(NULL, max, obj);
+ 	if (*amt > 0) {
+ 		cmd_set_arg_number(cmd, arg, *amt);
+ 		return CMD_OK;
+diff --git a/src/cmd-core.h b/src/cmd-core.h
+index 0aec1e428..9b883055a 100644
+--- a/src/cmd-core.h
++++ b/src/cmd-core.h
+@@ -410,4 +410,8 @@ int cmd_get_effect_from_list(struct command *cmd, const char *arg, int *choice,
+ 	const char *prompt, struct effect *effect, int count,
+ 	bool allow_random);
+ 
++/* Optional synchronous middleware; invoke the supplied handler exactly once. */
++extern void (*command_dispatch_hook)(struct command *,
++	void (*)(struct command *));
++
+ #endif
+diff --git a/src/cmd-pickup.c b/src/cmd-pickup.c
+index c122ae127..41692b8f3 100644
+--- a/src/cmd-pickup.c
++++ b/src/cmd-pickup.c
+@@ -267,7 +267,7 @@ static void player_pickup_aux(struct player *p, struct object *obj,
+ 		if (auto_max)
+ 			num = auto_max;
+ 		else
+-			num = get_quantity(NULL, max);
++			num = get_quantity_for_item(NULL, max, obj);
+ 		if (!num) return;
+ 		picked_up = floor_object_for_use(p, obj, num, false, &dummy);
+ 		inven_carry(p, picked_up, true, domsg);
+diff --git a/src/effect-handler-attack.c b/src/effect-handler-attack.c
+index d9fe8ee1d..8777008e0 100644
+--- a/src/effect-handler-attack.c
++++ b/src/effect-handler-attack.c
+@@ -224,6 +224,8 @@ bool effect_handler_HEAL_HP(effect_handler_context_t *context)
+ 	}
+ 
+ 	/* Gain hitpoints */
++	event_signal_combat(player->grid, "heal", MIN(num, player->mhp - player->chp),
++	                    true, true);
+ 	player->chp += num;
+ 
+ 	/* Enforce maximum */
+@@ -273,6 +275,8 @@ bool effect_handler_MON_HEAL_HP(effect_handler_context_t *context)
+ 	seen = (!player->timed[TMD_BLIND] && monster_is_visible(mon));
+ 
+ 	/* Heal some */
++	event_signal_combat(mon->grid, "heal", MIN(amount, mon->maxhp - mon->hp), false,
++	                    monster_is_visible(mon));
+ 	mon->hp += amount;
+ 
+ 	/* Fully healed */
+@@ -333,6 +337,8 @@ bool effect_handler_MON_HEAL_KIN(effect_handler_context_t *context)
+ 	seen = (!player->timed[TMD_BLIND] && monster_is_visible(mon));
+ 
+ 	/* Heal some */
++	event_signal_combat(mon->grid, "heal", MIN(amount, mon->maxhp - mon->hp), false,
++	                    monster_is_visible(mon));
+ 	mon->hp = MIN(mon->hp + amount, mon->maxhp);
+ 
+ 	if (seen) {
+diff --git a/src/effect-handler-general.c b/src/effect-handler-general.c
+index 6c9ad6b99..2ba530e8a 100644
+--- a/src/effect-handler-general.c
++++ b/src/effect-handler-general.c
+@@ -2662,6 +2662,7 @@ bool effect_handler_TELEPORT(effect_handler_context_t *context)
+ 	sound(is_player ? MSG_TELEPORT : MSG_TPOTHER);
+ 
+ 	/* Move player or monster */
++	event_signal_point(EVENT_TELEPORT, start.x, start.y);
+ 	monster_swap(start, spots->grid);
+ 	if (is_player) {
+ 		player_handle_post_move(player, true,
+@@ -2678,6 +2679,8 @@ bool effect_handler_TELEPORT(effect_handler_context_t *context)
+ 
+ 	/* Lots of updates after monster_swap */
+ 	handle_stuff(player);
++	if (!loc_eq(start, spots->grid))
++		event_signal_point(EVENT_TELEPORT, spots->grid.x, spots->grid.y);
+ 
+ 	while (spots) {
+ 		struct jumps *next = spots->next;
+@@ -2804,6 +2807,7 @@ bool effect_handler_TELEPORT_TO(effect_handler_context_t *context)
+ 	sound(MSG_TELEPORT);
+ 
+ 	/* Move player or monster */
++	event_signal_point(EVENT_TELEPORT, start.x, start.y);
+ 	monster_swap(start, land);
+ 	if (player_moves) {
+ 		player_handle_post_move(player, true,
+@@ -2820,6 +2824,8 @@ bool effect_handler_TELEPORT_TO(effect_handler_context_t *context)
+ 
+ 	/* Lots of updates after monster_swap */
+ 	handle_stuff(player);
++	if (!loc_eq(start, land))
++		event_signal_point(EVENT_TELEPORT, land.x, land.y);
+ 
+ 	return true;
+ }
+diff --git a/src/frontend-exports.cmake b/src/frontend-exports.cmake
+new file mode 100644
+index 000000000..a7e67b3a8
+--- /dev/null
++++ b/src/frontend-exports.cmake
+@@ -0,0 +1,20 @@
++# Include public constant and tentative data omitted by CMake's auto exports.
++execute_process(COMMAND "${TOOLS}/dumpbin.exe" /symbols "@${ROOT}/frontend-objects.rsp"
++    OUTPUT_VARIABLE symbols RESULT_VARIABLE result)
++if(NOT result STREQUAL "0")
++    message(FATAL_ERROR "Could not collect frontend data exports: ${result}")
++endif()
++string(REGEX MATCHALL "[0-9A-F]+ +[0-9A-F]+ +(UNDEF|SECT[0-9A-F]+) +notype +External[^\r\n]*" entries "${symbols}")
++set(exports "EXPORTS\n")
++foreach(entry IN LISTS entries)
++    if(entry MATCHES "^[0-9A-F]+ +([0-9A-F]+) +(UNDEF|SECT[0-9A-F]+).*\\| ([A-Za-z_][A-Za-z_0-9]*)$")
++        set(name "${CMAKE_MATCH_3}")
++        if(NOT CMAKE_MATCH_2 STREQUAL "UNDEF" OR NOT CMAKE_MATCH_1 STREQUAL "00000000")
++            if(BITS EQUAL 4)
++                string(SUBSTRING "${name}" 1 -1 name)
++            endif()
++            string(APPEND exports "${name} DATA\n")
++        endif()
++    endif()
++endforeach()
++file(WRITE "${ROOT}/frontend-data.def" "${exports}")
+diff --git a/src/frontend-module.c b/src/frontend-module.c
+new file mode 100644
+index 000000000..c60ec2ded
+--- /dev/null
++++ b/src/frontend-module.c
+@@ -0,0 +1,70 @@
++/** \file frontend-module.c
++ * \brief Load an explicitly selected, build-matched Windows frontend.
++ *
++ * Released under the same licences as Angband.
++ */
++#include "frontend-module.h"
++#include "frontend-build.h"
++#include <windows.h>
++#include <shellapi.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++int frontend_module_start(int *status)
++{
++	typedef const struct frontend_module *(*query_fn)(void);
++	int argc, i;
++	wchar_t **wide = CommandLineToArgvW(GetCommandLineW(), &argc);
++	wchar_t path[MAX_PATH];
++	char **argv = NULL;
++	HMODULE library = NULL;
++	query_fn query;
++	const struct frontend_module *module;
++	DWORD length;
++
++	*status = 2;
++	if (!wide) return 1;
++	if (argc < 2 || wcscmp(wide[1], L"--frontend")) {
++		LocalFree(wide);
++		return 0;
++	}
++	if (argc < 3) goto failed;
++	length = GetFullPathNameW(wide[2], MAX_PATH, path, NULL);
++	if (!length || length >= MAX_PATH) goto failed;
++	library = LoadLibraryExW(path, NULL,
++		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
++	if (!library) goto failed;
++	query = (query_fn)GetProcAddress(library, "angband_frontend_v1");
++	module = query ? query() : NULL;
++	if (!module || !module->build_id || !module->run ||
++		strcmp(module->build_id, ANGBAND_FRONTEND_BUILD_ID)) {
++		fputs("The frontend does not match this Angband build.\n", stderr);
++		goto done;
++	}
++	argv = calloc((size_t)argc - 1, sizeof(*argv));
++	if (!argv) goto failed;
++	for (i = 2; i < argc; ++i) {
++		int n = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
++			wide[i], -1, NULL, 0, NULL, NULL);
++		argv[i - 2] = n ? malloc((size_t)n) : NULL;
++		if (!argv[i - 2] || !WideCharToMultiByte(CP_UTF8,
++			WC_ERR_INVALID_CHARS, wide[i], -1, argv[i - 2], n,
++			NULL, NULL)) goto failed;
++	}
++	*status = module->run(argc - 2, argv);
++	/* Engine callbacks may still reference the module until process exit. */
++	library = NULL;
++	goto done;
++
++failed:
++	fputs("Could not start the selected frontend.\n", stderr);
++done:
++	if (argv) {
++		for (i = 0; i < argc - 2; ++i) free(argv[i]);
++		free(argv);
++	}
++	if (library) FreeLibrary(library);
++	LocalFree(wide);
++	return 1;
++}
+diff --git a/src/frontend-module.h b/src/frontend-module.h
+new file mode 100644
+index 000000000..1390e6a45
+--- /dev/null
++++ b/src/frontend-module.h
+@@ -0,0 +1,17 @@
++/** \file frontend-module.h
++ * \brief Entry contract for build-matched native frontends.
++ *
++ * Released under the same licences as Angband.
++ */
++#ifndef INCLUDED_FRONTEND_MODULE_H
++#define INCLUDED_FRONTEND_MODULE_H
++
++struct frontend_module {
++	const char *build_id;
++	int (*run)(int argc, char **argv);
++};
++
++/* Returns false when the ordinary frontend was requested. */
++int frontend_module_start(int *status);
++
++#endif
+diff --git a/src/game-event.c b/src/game-event.c
+index 28bff0f9f..561024fe4 100644
+--- a/src/game-event.c
++++ b/src/game-event.c
+@@ -208,7 +208,7 @@ void event_signal_blast(game_event_type type,
+ 						bool drawing,
+ 						bool *player_sees_grid,
+ 						struct loc *blast_grid,
+-						struct loc centre)
++						struct loc centre, bool arc)
+ {
+ 	game_event_data data;
+ 	data.explosion.proj_type = proj_type;
+@@ -218,6 +218,7 @@ void event_signal_blast(game_event_type type,
+ 	data.explosion.player_sees_grid = player_sees_grid;
+ 	data.explosion.blast_grid = blast_grid;
+ 	data.explosion.centre = centre;
++	data.explosion.arc = arc;
+ 
+ 	game_event_dispatch(type, &data);
+ }
+@@ -282,3 +283,17 @@ void event_signal_tunnel(game_event_type type, int nstep, int npierce, int ndug,
+ 	data.tunnel.early = early;
+ 	game_event_dispatch(type, &data);
+ }
++
++/* Observational only: callers supply the resolved outcome; no RNG or rules.
++ */
++void event_signal_combat(struct loc grid, const char *kind, int amount,
++                         bool player, bool visible)
++{
++	game_event_data data;
++	data.combat.grid = grid;
++	data.combat.kind = kind;
++	data.combat.amount = amount;
++	data.combat.player = player;
++	data.combat.visible = visible;
++	game_event_dispatch(EVENT_COMBAT_FEEDBACK, &data);
++}
+diff --git a/src/game-event.h b/src/game-event.h
+index ef763e097..16d8c2b5e 100644
+--- a/src/game-event.h
++++ b/src/game-event.h
+@@ -52,6 +52,10 @@ typedef enum game_event_type
+ 	EVENT_EXPLOSION,
+ 	EVENT_BOLT,
+ 	EVENT_MISSILE,
++	EVENT_COMBAT_FEEDBACK,
++	EVENT_MONSTER_MOVE_BEGIN,
++	EVENT_MONSTER_MOVE_END,
++	EVENT_TELEPORT,
+ 
+ 	EVENT_INVENTORY,
+ 	EVENT_EQUIPMENT,
+@@ -60,6 +64,8 @@ typedef enum game_event_type
+ 	EVENT_MONSTERTARGET,
+ 	EVENT_OBJECTTARGET,
+ 	EVENT_MESSAGE,
++	EVENT_SOUND_CUE,       /* Unfiltered sound; message.type is MSG_*. */
++	EVENT_TARGET_SELECTED, /* Successful explicit selection, not tracking. */
+ 	EVENT_SOUND,
+ 	EVENT_BELL,
+ 	EVENT_USE_STORE,
+@@ -107,6 +113,12 @@ typedef enum game_event_type
+ 
+ typedef union
+ {
++	struct {
++		struct loc grid;
++		const char *kind;
++		int amount;
++		bool player, visible;
++	} combat;
+ 	struct loc point;
+ 
+ 	const char *string;
+@@ -140,6 +152,7 @@ typedef union
+ 	{
+ 		int proj_type;
+ 		int num_grids;
++		bool arc; /* Cone geometry, not an explosion centered at the target. */
+ 		int *distance_to_grid;
+ 		bool drawing;
+ 		bool *player_sees_grid;
+@@ -217,6 +230,8 @@ void event_remove_handler_set(game_event_type *type, size_t n_types, game_event_
+ void event_signal_birthpoints(const int *points, const int *inc_points,
+ 	int remaining);
+ 
++void event_signal_combat(struct loc grid, const char *kind, int amount,
++                         bool player, bool visible);
+ void event_signal_point(game_event_type, int x, int y);
+ void event_signal_string(game_event_type, const char *s);
+ void event_signal_message(game_event_type type, int t, const char *s);
+@@ -229,7 +244,7 @@ void event_signal_blast(game_event_type type,
+ 						bool seen,
+ 						bool *player_sees_grid,
+ 						struct loc *blast_grid,
+-						struct loc centre);
++						struct loc centre, bool arc);
+ void event_signal_bolt(game_event_type type,
+ 					   int proj_type,
+ 					   bool drawing,
+diff --git a/src/game-input.c b/src/game-input.c
+index 263ebf06e..3a1a42736 100644
+--- a/src/game-input.c
++++ b/src/game-input.c
+@@ -70,6 +70,12 @@ bool get_string(const char *prompt, char *buf, size_t len)
+  * \param max is the maximum value to accept
+  * \return the quantity
+  */
++int (*get_quantity_for_item_hook)(const char *, int, const struct object *);
++int get_quantity_for_item(const char *prompt, int max, const struct object *obj)
++{
++	return get_quantity_for_item_hook ?
++		get_quantity_for_item_hook(prompt, max, obj) : get_quantity(prompt, max);
++}
+ int get_quantity(const char *prompt, int max)
+ {
+ 	/* Ask the UI for it */
+diff --git a/src/game-input.h b/src/game-input.h
+index af20d1fd3..724ec3af9 100644
+--- a/src/game-input.h
++++ b/src/game-input.h
+@@ -68,6 +68,10 @@ extern void (*view_abilities_hook)(struct player_ability *ability_list,
+ 
+ bool get_string(const char *prompt, char *buf, size_t len);
+ int get_quantity(const char *prompt, int max);
++/* Optional presentation context; does not change quantity rules. */
++extern int (*get_quantity_for_item_hook)(const char *, int,
++	const struct object *);
++int get_quantity_for_item(const char *prompt, int max, const struct object *obj);
+ bool get_check(const char *prompt);
+ bool get_com(const char *prompt, char *command);
+ bool get_rep_dir(int *dir, bool allow_none);
+diff --git a/src/main-win.c b/src/main-win.c
+index 725d7a693..f6c21c6a9 100644
+--- a/src/main-win.c
++++ b/src/main-win.c
+@@ -56,6 +56,9 @@
+ 
+ #include "angband.h"
+ #include "buildid.h"
++#ifdef FRONTEND_MODULES
++#include "frontend-module.h"
++#endif
+ #include "cmds.h"
+ #include "cave.h"
+ #include "game-world.h"
+@@ -5252,6 +5255,10 @@ int FAR PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrevInst,
+ {
+ 	int i;
+ 
++#ifdef FRONTEND_MODULES
++	if (frontend_module_start(&i)) return i;
++#endif
++
+ 	WNDCLASS wc;
+ 	HDC hdc;
+ 	MSG msg;
+diff --git a/src/message.c b/src/message.c
+index 70e93e61a..08dce49b1 100644
+--- a/src/message.c
++++ b/src/message.c
+@@ -367,6 +367,8 @@ const char *message_sound_name(int message)
+  */
+ void sound(int type)
+ {
++	/* Semantic cue, before the legacy frontend playback preference. */
++	event_signal_message(EVENT_SOUND_CUE, type, NULL);
+ 	/* No sound */
+ 	if (!OPT(player, use_sound)) return;
+ 
+diff --git a/src/mon-attack.c b/src/mon-attack.c
+index a6833138b..319d59f62 100644
+--- a/src/mon-attack.c
++++ b/src/mon-attack.c
+@@ -720,6 +720,7 @@ bool make_attack_normal(struct monster *mon, struct player *p)
+ 				/* Disturbing */
+ 				disturb(p);
+ 				msg("%s misses you.", m_name);
++				event_signal_combat(p->grid, "miss", 0, true, true);
+ 			}
+ 		}
+ 
+diff --git a/src/mon-move.c b/src/mon-move.c
+index c204fa5a6..e8cdb92ea 100644
+--- a/src/mon-move.c
++++ b/src/mon-move.c
+@@ -1360,7 +1360,9 @@ static bool monster_turn_try_push(struct monster *mon, const char *m_name,
+ 		if (kill_ok)
+ 			delete_monster(cave, new);
+ 
++		event_signal_point(EVENT_MONSTER_MOVE_BEGIN, mon->grid.x, mon->grid.y);
+ 		monster_swap(mon->grid, new);
++		event_signal_point(EVENT_MONSTER_MOVE_END, new.x, new.y);
+ 		return true;
+ 	}
+ 
+@@ -1647,7 +1649,9 @@ static void monster_turn(struct monster *mon)
+ 			did_something = monster_turn_try_push(mon, m_name, new);
+ 		} else {
+ 			/* Otherwise we can just move */
++			event_signal_point(EVENT_MONSTER_MOVE_BEGIN, mon->grid.x, mon->grid.y);
+ 			monster_swap(mon->grid, new);
++			event_signal_point(EVENT_MONSTER_MOVE_END, new.x, new.y);
+ 			did_something = true;
+ 		}
+ 
+diff --git a/src/mon-util.c b/src/mon-util.c
+index 1c8033b19..f17350114 100644
+--- a/src/mon-util.c
++++ b/src/mon-util.c
+@@ -1211,6 +1211,8 @@ bool mon_take_nonplayer_hit(int dam, struct monster *t_mon,
+ 
+ 	/* Hurt the monster */
+ 	t_mon->hp -= dam;
++	event_signal_combat(t_mon->grid, "damage", dam, false,
++	                    monster_is_visible(t_mon));
+ 
+ 	/* Dead or damaged monster */
+ 	if (t_mon->hp < 0) {
+@@ -1286,6 +1288,7 @@ bool mon_take_hit(struct monster *mon, struct player *p, int dam, bool *fear,
+ 
+ 	/* Hurt it */
+ 	mon->hp -= dam;
++	event_signal_combat(mon->grid, "damage", dam, false, monster_is_visible(mon));
+ 	if (mon->hp < 0) {
+ 		/* Deal with arena monsters */
+ 		if (p->upkeep->arena_level) {
+diff --git a/src/obj-power.c b/src/obj-power.c
+index ca0b137f7..7bc38fe8b 100644
+--- a/src/obj-power.c
++++ b/src/obj-power.c
+@@ -1159,7 +1159,9 @@ int object_value_real(const struct object *obj, int qty)
+ 			}
+ 		} else if (power < 0) {
+ 			if (a > 0) {
+-				if (power > INT_MIN && power >= (INT_MIN / (-power) + b) / a) {
++				/* Keep MSVC's negated-division optimization from overflowing. */
++				if (power > INT_MIN &&
++					power >= ((int64_t)INT_MIN / -(int64_t)power + b) / a) {
+ 					value = -power * (power * a - b);
+ 				} else {
+ 					value = INT_MIN;
+diff --git a/src/player-attack.c b/src/player-attack.c
+index 85f161fb5..41de91746 100644
+--- a/src/player-attack.c
++++ b/src/player-attack.c
+@@ -765,6 +765,7 @@ bool py_attack_real(struct player *p, struct loc grid, bool *fear)
+ 	/* If a miss, skip this hit */
+ 	if (!success) {
+ 		msgt(MSG_MISS, "You miss %s.", m_name);
++		event_signal_combat(mon->grid, "miss", 0, false, monster_is_visible(mon));
+ 
+ 		/* Small chance of bloodlust side-effects */
+ 		if (p->timed[TMD_BLOODLUST] && one_in_(50)) {
+@@ -1195,6 +1196,9 @@ static void ranged_helper(struct player *p,	struct object *obj, int dir,
+ 					}
+ 				}
+ 			}
++			if (!result.success)
++				event_signal_combat(mon->grid, "miss", 0, false,
++					monster_is_visible(mon));
+ 			/* Stop the missile, or reduce its piercing effect */
+ 			pierce--;
+ 			if (pierce) continue;
+diff --git a/src/player-util.c b/src/player-util.c
+index 3da8c22aa..bf04f2f91 100644
+--- a/src/player-util.c
++++ b/src/player-util.c
+@@ -208,6 +208,7 @@ void take_hit(struct player *p, int dam, const char *kb_str)
+ 
+ 	/* Hurt the player */
+ 	p->chp -= dam;
++	event_signal_combat(p->grid, "damage", dam, true, true);
+ 
+ 	/* Reward COMBAT_REGEN characters with mana for their lost hitpoints
+ 	 * Unenviable task of separating what should and should not cause rage
+diff --git a/src/project-mon.c b/src/project-mon.c
+index 803894553..ac3601239 100644
+--- a/src/project-mon.c
++++ b/src/project-mon.c
+@@ -919,6 +919,9 @@ static void project_monster_handler_MON_POLY(project_monster_handler_context_t *
+ static void project_monster_handler_MON_HEAL(project_monster_handler_context_t *context)
+ {
+ 	/* Heal */
++	event_signal_combat(context->mon->grid, "heal",
++	                    MIN(context->dam, context->mon->maxhp - context->mon->hp),
++	                    false, monster_is_visible(context->mon));
+ 	context->mon->hp += context->dam;
+ 
+ 	/* No overflow */
+@@ -1055,6 +1058,7 @@ static bool project_m_monster_attack(project_monster_handler_context_t *context,
+ 
+ 	/* Hurt the monster */
+ 	mon->hp -= dam;
++	event_signal_combat(mon->grid, "damage", dam, false, monster_is_visible(mon));
+ 
+ 	/* Dead or damaged monster */
+ 	if (mon->hp < 0) {
+diff --git a/src/project.c b/src/project.c
+index 731354cf5..d614ffa88 100644
+--- a/src/project.c
++++ b/src/project.c
+@@ -913,7 +913,7 @@ bool project(struct source origin, int rad, struct loc finish,
+ 
+ 	/* Tell the UI to display the blast */
+ 	event_signal_blast(EVENT_EXPLOSION, typ, num_grids, distance_to_grid,
+-					   drawing, player_sees_grid, blast_grid, centre);
++					   drawing, player_sees_grid, blast_grid, centre, (flg & PROJECT_ARC) != 0);
+ 
+ 	/* Affect objects on every relevant grid */
+ 	if (flg & (PROJECT_ITEM)) {
+diff --git a/src/target.c b/src/target.c
+index 715020c2b..4366d8888 100644
+--- a/src/target.c
++++ b/src/target.c
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "angband.h"
++#include "game-event.h"
+ #include "cave.h"
+ #include "cmd-core.h"
+ #include "game-input.h"
+@@ -156,6 +157,7 @@ bool target_set_monster(struct monster *mon)
+ 		target_set = true;
+ 		target.midx = mon->midx;
+ 		target.grid = mon->grid;
++		event_signal(EVENT_TARGET_SELECTED);
+ 		return true;
+ 	} else if (target_fixed) {
+ 		/* If a monster has died during a spell, this maintains its grid as
+@@ -187,6 +189,7 @@ void target_set_location(int y, int x)
+ 		target_set = true;
+ 		target.midx = 0;
+ 		target.grid = grid;
++		event_signal(EVENT_TARGET_SELECTED);
+ 		return;
+ 	}
+ 

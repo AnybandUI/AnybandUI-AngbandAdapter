@@ -1,0 +1,25 @@
+[1/2] Building C object CMakeFiles\frontend.dir\plugin.c.obj
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-item-rules.h(92): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-item-rules.h(92): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-item-rules.h(93): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-tuning.h(225): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-tuning.h(226): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-tuning.h(234): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-tuning.h(235): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-tuning.h(369): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-run.h(30): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-knowledge.h(230): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-knowledge.h(251): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-blast.h(92): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-blast.h(92): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-blast.h(95): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-travel.h(339): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-travel.h(339): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-travel.h(350): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-birth.h(135): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-birth.h(143): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-birth.h(192): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-birth.h(203): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src\anybandui-birth.h(203): warning C4090: 'function': different 'const' qualifiers
+C:\Users\developer\.codex\visualizations\2026\09\27\01a0e4cd-f1d4-76d0-b047-4aefecb75513\frontend-plugin\adapter-src/main-anybandui.c(842): warning C4090: 'function': different 'const' qualifiers
+[2/2] Linking C shared module frontend.dll
