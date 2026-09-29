@@ -1,6 +1,6 @@
 # AnybandUI Angband adapter
 
-An Angband-specific implementation of the [AnybandUI](https://github.com/WurliMonkhaven/AngbandDeluxe)
+An Angband-specific implementation of the [AnybandUI](https://github.com/AnybandUI/AnybandUI)
 `full-v1` protocol. The adapter compiles with the Angband core into one engine
 executable; the desktop UI communicates with it through JSON over stdin/stdout.
 
