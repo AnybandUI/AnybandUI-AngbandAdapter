@@ -9,7 +9,10 @@ set_target_properties(${ANGBAND_FRONTEND_TARGET} PROPERTIES
     OUTPUT_NAME angband-anybandui C_STANDARD 99)
 if(WIN32)
     # The engine's shared unit-test objects need the same platform definitions.
-    add_compile_definitions(WINDOWS _CRT_SECURE_NO_WARNINGS)
+    add_compile_definitions(WINDOWS _CRT_SECURE_NO_WARNINGS SOUND)
+    # Use Angband's shared Windows backend, including its MP3/WAV support.
+    list(APPEND ANGBAND_CORE_LINK_LIBRARIES winmm)
+    target_link_libraries(${ANGBAND_FRONTEND_TARGET} PRIVATE winmm)
 endif()
 configure_file("${ADAPTER_ROOT}/engine.anyband.json.in"
     "${CMAKE_BINARY_DIR}/game/engine.anyband.json" @ONLY)
@@ -27,3 +30,14 @@ target_include_directories(anybandui-map-tests PRIVATE
 target_link_libraries(anybandui-map-tests PRIVATE ${ANGBAND_CORE_LINK_LIBRARIES})
 set_target_properties(anybandui-map-tests PROPERTIES C_STANDARD 99
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/game")
+# Optional real-device smoke test for the shared official Windows sound backend.
+if(WIN32)
+    add_executable(anybandui-sound-tests EXCLUDE_FROM_ALL
+        "${ADAPTER_ROOT}/tests/sound.c"
+        $<TARGET_OBJECTS:OurUnitTestLib> $<TARGET_OBJECTS:OurCoreLib>)
+    target_include_directories(anybandui-sound-tests PRIVATE
+        ${ANGBAND_CORE_INCLUDE_DIRS} "${CMAKE_CURRENT_SOURCE_DIR}/src/tests")
+    target_link_libraries(anybandui-sound-tests PRIVATE ${ANGBAND_CORE_LINK_LIBRARIES})
+    set_target_properties(anybandui-sound-tests PROPERTIES C_STANDARD 99
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/game")
+endif()

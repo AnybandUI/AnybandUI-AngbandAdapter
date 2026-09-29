@@ -44,6 +44,14 @@ The output directory must be new. Copy the package into `engines/` beside
 `AnybandUI.exe`. Install only one package with the same engine/save identity.
 Frontend settings and engine saves live outside the installation directory.
 
+## Sound
+
+On Windows, the engine plays Angband's official sounds directly. Enable **Use
+sound** in AnybandUI's **Settings > Game rules** for the current character.
+The setting is saved with the character. Keep `lib/sounds` and
+`lib/customize/sound.prf` in the engine package. Playback uses Windows system
+libraries; no additional audio DLLs or AnybandUI audio pack are needed.
+
 ## Checks
 
 ```powershell

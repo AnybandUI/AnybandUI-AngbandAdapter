@@ -19,14 +19,16 @@ def main():
         "src", "CMakeLists.txt"], cwd=args.repository)
     with tarfile.open(fileobj=io.BytesIO(archive)) as tree:
         original = {m.name: tree.extractfile(m).read() for m in tree.getmembers() if m.isfile()}
-    names = sorted(original)
+    build_files = {"CMakeLists.txt", "src/Makefile.src", "src/win/vs2019/Angband.vcxproj"}
+    names = sorted(set(original) | {p.relative_to(args.source).as_posix()
+                   for p in (args.source / "src").rglob("*") if p.suffix in (".c", ".h")})
     groups = {"01-correctness.patch": [], "02-frontend-interface.patch": [], "03-external-build.patch": []}
     records = []
     for name in names:
         path = args.source / name
-        if not path.is_file() or (path.suffix not in (".h", ".c") and name != "CMakeLists.txt"):
+        if not path.is_file() or (path.suffix not in (".h", ".c") and name not in build_files):
             continue
-        before = original[name]
+        before = original.get(name, b"")
         after = path.read_bytes()
         if before.replace(b"\r\n", b"\n") == after.replace(b"\r\n", b"\n"):
             continue
@@ -48,9 +50,9 @@ def main():
 					motion_dir(player->grid, loc(x, y)));""", 1)
         def difference(left, right):
             return list(difflib.unified_diff(left.splitlines(True), right.splitlines(True),
-                fromfile="a/" + name, tofile="b/" + name))
+                fromfile="a/" + name if name in original else "/dev/null", tofile="b/" + name))
         groups["01-correctness.patch"].extend(difference(before_text, corrected))
-        group = "03-external-build.patch" if name == "CMakeLists.txt" else "02-frontend-interface.patch"
+        group = "03-external-build.patch" if name in build_files else "02-frontend-interface.patch"
         groups[group].extend(difference(corrected, after_text))
         diff = difference(before_text, after_text)
         records.append({"path": name, "added": sum(l.startswith("+") for l in diff[2:]),

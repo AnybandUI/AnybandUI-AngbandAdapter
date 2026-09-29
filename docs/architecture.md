@@ -59,8 +59,12 @@ Apply `patches/series` in order to the commit in `upstream.json`:
    callbacks and events.
 3. Generic external-frontend build support.
 
-Official Angband sound support and assets are preserved. The custom AnybandUI
-sound events and playback system have been removed.
+Official Angband sound support and assets are preserved. On Windows, the adapter
+initializes the shared native sound backend before loading preferences and closes
+it on exit. Sound plays in the engine process using `sound.prf`, the shipped MP3
+samples and the character's `use_sound` option. No audio protocol events or
+AnybandUI playback subsystem are involved. The original Windows frontend uses
+the same extracted backend.
 
 `tools/export_patches.py` regenerates this series and `docs/surface.json` from an
 explicitly prepared engine tree. Measurements compare with the pinned upstream

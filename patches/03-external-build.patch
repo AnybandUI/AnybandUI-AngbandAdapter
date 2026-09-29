@@ -19,7 +19,25 @@
      if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
          set(SUPPORT_WINDOWS_FRONTEND ON)
      else()
-@@ -427,7 +430,7 @@
+@@ -256,6 +259,7 @@
+         src/savefile.c
+         src/score.c
+         src/score-util.c
++        src/snd-win.c
+         src/sound-core.c
+         src/source.c
+         src/store.c
+@@ -379,6 +383,9 @@
+ set_target_properties(OurCoreLib PROPERTIES C_STANDARD 99)
+ set(ANGBAND_CORE_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/src")
+ set(ANGBAND_CORE_LINK_LIBRARIES "")
++if(SUPPORT_WINDOWS_FRONTEND)
++    list(APPEND ANGBAND_CORE_LINK_LIBRARIES winmm)
++endif()
+ 
+ if(SUPPORT_BORG)
+     target_include_directories(OurCoreLib PRIVATE
+@@ -427,7 +434,7 @@
          $<$<BOOL:${SUPPORT_STATS_FRONTEND}>:src/main-stats.c>
          $<$<BOOL:${SUPPORT_STATS_FRONTEND}>:src/stats/db.c>
          $<$<BOOL:${SUPPORT_TEST_FRONTEND}>:src/main-test.c>
@@ -28,7 +46,7 @@
  )
  
  set_target_properties(OurExecutable PROPERTIES
-@@ -438,6 +441,16 @@
+@@ -438,6 +445,16 @@
      ${ANGBAND_CORE_INCLUDE_DIRS}
  )
  target_link_libraries(OurExecutable PRIVATE ${ANGBAND_CORE_LINK_LIBRARIES})
@@ -45,3 +63,23 @@
  
  # Allow for some introspection:  have rules to print out names that something
  # downstream could use.  Have the output start with "our-<something>=" so it
+--- a/src/Makefile.src
++++ b/src/Makefile.src
+@@ -249,6 +249,7 @@
+ 	save-charoutput.o \
+ 	score.o \
+ 	score-util.o \
++	snd-win.o \
+ 	sound-core.o \
+ 	source.o \
+ 	store.o \
+--- a/src/win/vs2019/Angband.vcxproj
++++ b/src/win/vs2019/Angband.vcxproj
+@@ -313,6 +313,7 @@
+     <ClCompile Include="src\savefile.c" />
+     <ClCompile Include="src\score.c" />
+     <ClCompile Include="src\score-util.c" />
++    <ClCompile Include="src\snd-win.c" />
+     <ClCompile Include="src\sound-core.c" />
+     <ClCompile Include="src\source.c" />
+     <ClCompile Include="src\store.c" />

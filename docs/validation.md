@@ -12,6 +12,11 @@
 - AnybandUI startup negotiates engine identity and Anyband Protocol capabilities.
   A successful handshake alone does not certify every capability.
 
+- `tests/sound.c`: Windows real-device smoke checks for official MP3 playback,
+  missing files, preference loading and repeated shutdown/startup. Build
+  `anybandui-sound-tests` and run it with `-v` from the build's `game` directory.
+  It may play a short sound; inspect the printed 3/3 result as well as exit status.
+
 ## Recorded baseline
 
 On 29 September 2026, a clean MSVC/NMake build of the standalone engine and map

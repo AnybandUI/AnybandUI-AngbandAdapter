@@ -1,6 +1,7 @@
 /* AnybandUI local semantic adapter. GPLv2, as for the engine.
  * All engine access runs on its main thread at input boundaries. */
 #include "angband.h"
+#include "sound.h"
 #include "cJSON.h"
 #include "cave.h"
 #include "cmd-core.h"
@@ -2125,6 +2126,12 @@ int main(int argc, char **argv)
 	constants_parser.run = stock_constants_run;
 	mem_free(custom_constants_text);
 	custom_constants_text = NULL;
+#ifdef SOUND
+	/* Install playback hooks before pref.prf loads the official sound mappings. */
+	if (init_sound(NULL, 0, NULL) != 0)
+		plog("Angband sound could not be initialized.");
+	atexit(close_sound);
+#endif
 	textui_init();
 	initialized = true;
 	if (use_native_birth)
@@ -2171,6 +2178,9 @@ int main(int argc, char **argv)
 	anybandui_tiles_free();
 	close_graphics_modes();
 	textui_cleanup();
+#ifdef SOUND
+	close_sound();
+#endif
 	cleanup_angband();
 	anybandui_reset_view();
 	return 0;
