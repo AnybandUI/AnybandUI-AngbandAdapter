@@ -840,6 +840,30 @@
  
  	/* Affect objects on every relevant grid */
  	if (flg & (PROJECT_ITEM)) {
+--- a/src/snd-sdl.c
++++ b/src/snd-sdl.c
+@@ -77,7 +77,10 @@
+ 
+ 	/* Try to open the audio */
+ 	if (Mix_OpenAudio(audio_rate, audio_format, audio_channels, 4096) < 0) {
+-		plog_fmt("SDL: Couldn't open mixer: %s", SDL_GetError());
++		plog_fmt("SDL: Couldn't open mixer: %s", Mix_GetError());
++#ifdef SOUND_SDL2
++		Mix_Quit();
++#endif
+ 		SDL_QuitSubSystem(SDL_INIT_AUDIO);
+ 		return false;
+ 	}
+@@ -243,6 +246,9 @@
+ 	 * calling unload_sound_sdl() for every sample that was loaded.
+ 	 */
+ 	Mix_CloseAudio();
++#ifdef SOUND_SDL2
++	Mix_Quit();
++#endif
+ 	SDL_QuitSubSystem(SDL_INIT_AUDIO);
+ 
+ 	return true;
 --- /dev/null
 +++ b/src/snd-win.c
 @@ -0,0 +1,202 @@
@@ -1047,40 +1071,99 @@
 +#endif /* SOUND && !SOUND_SDL && !SOUND_SDL2 */
 --- a/src/sound-core.c
 +++ b/src/sound-core.c
-@@ -391,6 +391,7 @@
+@@ -85,6 +85,7 @@
+ 
+ /* These are the hooks installed by the platform sound module */
+ static struct sound_hooks hooks;
++static bool audio_open;
+ 
+ /*
+  * If preload_sounds is true, sounds are loaded immediately when assigned to
+@@ -379,6 +380,8 @@
+ 	if (!hooks.open_audio_hook())
+ 		return 1;
+ 
++	audio_open = true;
++
+ 	/* Enable sound */
+ 	event_add_handler(EVENT_SOUND, play_sound, NULL);
+ 
+@@ -391,29 +394,28 @@
   */
  void close_sound(void)
  {
+-	if (0 == next_sound_id) return;	/* Never opened */
 +	event_remove_handler(EVENT_SOUND, play_sound, NULL);
- 	if (0 == next_sound_id) return;	/* Never opened */
  
  	/*
-@@ -409,6 +410,7 @@
+ 	 * Ask the platforms sound module to free resources for each
+ 	 * sound
+ 	 */
+-	if (hooks.unload_sound_hook) {
+-		int i;
+-
+-		for (i = 0; i < next_sound_id; i++) {
++	for (int i = 0; i < next_sound_id; i++) {
++		if (hooks.unload_sound_hook)
+ 			hooks.unload_sound_hook(&sounds[i]);
+-			string_free(sounds[i].name);
+-		}
++		string_free(sounds[i].name);
+ 	}
+ 
  	mem_free(sounds);
  	sounds = NULL;
  	next_sound_id = 0;
 +	memset(message_sounds, 0, sizeof(message_sounds));
  
  	/* Close the platform's sound module */
- 	if (hooks.close_audio_hook) {
+-	if (hooks.close_audio_hook) {
++	if (audio_open && hooks.close_audio_hook) {
+ 		hooks.close_audio_hook();
+ 	}
++	audio_open = false;
+ }
+ 
+ /**
+@@ -422,7 +424,7 @@
+  */
+ bool is_sound_inited(void)
+ {
+-	return next_sound_id != 0;
++	return audio_open;
+ }
+ 
+ /**
 --- a/src/tests/test-utils.c
 +++ b/src/tests/test-utils.c
-@@ -27,15 +27,7 @@
+@@ -16,25 +16,16 @@
+ #include "unit-test.h"
+ #include "z-util.h"
  
- #endif
+-#if defined(SOUND_SDL) || defined(SOUND_SDL2)
++#if (defined(SOUND_SDL) || defined(SOUND_SDL2)) && !defined(TEST_REAL_SOUND)
+ #include "sound.h"
+ #include "snd-sdl.h"
  
++/* Some test builds link only the core, without a sound backend. */
+ errr init_sound_sdl(struct sound_hooks *hooks, int argc, char **argv)
+ {
+ 	return (0);
+ }
+ 
+-#endif
+-
 -#if !defined(WIN32_CONSOLE_MODE) && defined(WINDOWS) && defined(SOUND) && !defined(SOUND_SDL) && !defined(SOUND_SDL2)
 -#include "sound.h"
 -#include "snd-win.h"
- 
+-
 -errr init_sound_win(struct sound_hooks *hooks, int argc, char **argv)
 -{
 -	return 0;
 -}
--#endif
+ #endif
  
  /*
-  * Call this to initialise Angband's file paths before calling init_angband()
 --- a/src/ui-birth.c
 +++ b/src/ui-birth.c
 @@ -1614,8 +1614,11 @@

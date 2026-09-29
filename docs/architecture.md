@@ -59,8 +59,9 @@ Apply `patches/series` in order to the commit in `upstream.json`:
    callbacks and events.
 3. Generic external-frontend build support.
 
-Official Angband sound support and assets are preserved. On Windows, the adapter
-initializes the shared native sound backend before loading preferences and closes
+Official Angband sound support and assets are preserved. The adapter uses the
+shared Windows backend on Windows and the official SDL2/SDL2_mixer backend on
+macOS and Linux. It initializes sound before loading preferences and closes
 it on exit. Sound plays in the engine process using `sound.prf`, the shipped MP3
 samples and the character's `use_sound` option. No audio protocol events or
 AnybandUI playback subsystem are involved. The original Windows frontend uses

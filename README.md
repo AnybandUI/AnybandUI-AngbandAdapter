@@ -24,6 +24,21 @@ Preparation exports the pinned commit and applies the patches without changing
 the original checkout. An existing prepared tree is reused only if its recorded
 commit, patches and contents match. Choose another `--source` directory if needed.
 
+On macOS, install build/audio dependencies with
+`brew install cmake ninja pkg-config sdl2 sdl2_mixer`. On Debian/Ubuntu, install
+`build-essential cmake ninja-build pkg-config libsdl2-dev libsdl2-mixer-dev`.
+Python 3.12+ and Git are also required. Build the engine from this directory:
+
+```sh
+python3 -B tools/prepare.py --repository ../angband
+cmake -S build/engine -B build/native -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DANGBAND_EXTERNAL_FRONTEND="$PWD" -DSUPPORT_BORG=OFF -DSUPPORT_SPOIL_FRONTEND=OFF
+cmake --build build/native --target OurExecutable anybandui-map-tests anybandui-sound-tests
+```
+
+These commands build the adapter engine. The combined desktop release script
+currently targets Windows. macOS/Linux installations require the SDL2 and
+SDL2_mixer shared libraries at runtime; the packager does not bundle them.
+
 ## Run and install
 
 Build AnybandUI separately, then point it at this engine. A separate user directory
@@ -46,11 +61,15 @@ Frontend settings and engine saves live outside the installation directory.
 
 ## Sound
 
-On Windows, the engine plays Angband's official sounds directly. Enable **Use
+The engine plays Angband's official sounds directly on Windows, macOS and Linux. Enable **Use
 sound** in AnybandUI's **Settings > Game rules** for the current character.
 The setting is saved with the character. Keep `lib/sounds` and
-`lib/customize/sound.prf` in the engine package. Playback uses Windows system
-libraries; no additional audio DLLs or AnybandUI audio pack are needed.
+`lib/customize/sound.prf` in the engine package. Windows uses system audio
+libraries. macOS and Linux use Angband's SDL2 backend with SDL2_mixer and MP3
+decoding support for the official sound pack. No AnybandUI audio pack is needed.
+Decoders load on demand, so a missing MP3 decoder does not disable other supported
+formats. If the audio device is unavailable, the engine logs the failure and
+remains playable.
 
 ## Checks
 

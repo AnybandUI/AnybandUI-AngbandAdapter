@@ -13,6 +13,26 @@ if(WIN32)
     # Use Angband's shared Windows backend, including its MP3/WAV support.
     list(APPEND ANGBAND_CORE_LINK_LIBRARIES winmm)
     target_link_libraries(${ANGBAND_FRONTEND_TARGET} PRIVATE winmm)
+else()
+    if(SUPPORT_SDL_SOUND)
+        message(FATAL_ERROR "The adapter uses SDL2 audio; disable SUPPORT_SDL_SOUND (SDL1).")
+    endif()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ANYBANDUI_SDL2 REQUIRED IMPORTED_TARGET sdl2 SDL2_mixer>=2.0.0)
+    # Use the official backend in the engine process; the UI's SDL3 is separate.
+    # Our tests link the real backend instead of Angband's core-only test stub.
+    add_compile_definitions(SOUND SOUND_SDL2 TEST_REAL_SOUND)
+    add_library(anybandui_sound STATIC "${CMAKE_CURRENT_SOURCE_DIR}/src/snd-sdl.c")
+    target_include_directories(anybandui_sound PRIVATE ${ANGBAND_CORE_INCLUDE_DIRS})
+    target_link_libraries(anybandui_sound PUBLIC PkgConfig::ANYBANDUI_SDL2)
+    set_target_properties(anybandui_sound PROPERTIES C_STANDARD 99)
+    list(APPEND ANGBAND_CORE_LINK_LIBRARIES anybandui_sound)
+    target_link_libraries(${ANGBAND_FRONTEND_TARGET} PRIVATE anybandui_sound)
+    find_library(ANYBANDUI_MATH_LIBRARY m)
+    if(ANYBANDUI_MATH_LIBRARY)
+        list(APPEND ANGBAND_CORE_LINK_LIBRARIES ${ANYBANDUI_MATH_LIBRARY})
+        target_link_libraries(${ANGBAND_FRONTEND_TARGET} PRIVATE ${ANYBANDUI_MATH_LIBRARY})
+    endif()
 endif()
 configure_file("${ADAPTER_ROOT}/engine.anyband.json.in"
     "${CMAKE_BINARY_DIR}/game/engine.anyband.json" @ONLY)
@@ -30,14 +50,12 @@ target_include_directories(anybandui-map-tests PRIVATE
 target_link_libraries(anybandui-map-tests PRIVATE ${ANGBAND_CORE_LINK_LIBRARIES})
 set_target_properties(anybandui-map-tests PROPERTIES C_STANDARD 99
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/game")
-# Optional real-device smoke test for the shared official Windows sound backend.
-if(WIN32)
-    add_executable(anybandui-sound-tests EXCLUDE_FROM_ALL
-        "${ADAPTER_ROOT}/tests/sound.c"
-        $<TARGET_OBJECTS:OurUnitTestLib> $<TARGET_OBJECTS:OurCoreLib>)
-    target_include_directories(anybandui-sound-tests PRIVATE
-        ${ANGBAND_CORE_INCLUDE_DIRS} "${CMAKE_CURRENT_SOURCE_DIR}/src/tests")
-    target_link_libraries(anybandui-sound-tests PRIVATE ${ANGBAND_CORE_LINK_LIBRARIES})
-    set_target_properties(anybandui-sound-tests PROPERTIES C_STANDARD 99
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/game")
-endif()
+# Official backend checks; SDL_AUDIODRIVER=dummy allows headless SDL2 testing.
+add_executable(anybandui-sound-tests EXCLUDE_FROM_ALL
+    "${ADAPTER_ROOT}/tests/sound.c"
+    $<TARGET_OBJECTS:OurUnitTestLib> $<TARGET_OBJECTS:OurCoreLib>)
+target_include_directories(anybandui-sound-tests PRIVATE
+    ${ANGBAND_CORE_INCLUDE_DIRS} "${CMAKE_CURRENT_SOURCE_DIR}/src/tests")
+target_link_libraries(anybandui-sound-tests PRIVATE ${ANGBAND_CORE_LINK_LIBRARIES})
+set_target_properties(anybandui-sound-tests PROPERTIES C_STANDARD 99
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/game")

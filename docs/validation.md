@@ -12,10 +12,14 @@
 - AnybandUI startup negotiates engine identity and Anyband Protocol capabilities.
   A successful handshake alone does not certify every capability.
 
-- `tests/sound.c`: Windows real-device smoke checks for official MP3 playback,
-  missing files, preference loading and repeated shutdown/startup. Build
+- `tests/sound.c`: official MP3 playback, missing files, preference loading,
+  shutdown without samples and repeated shutdown/startup. Build
   `anybandui-sound-tests` and run it with `-v` from the build's `game` directory.
-  It may play a short sound; inspect the printed 3/3 result as well as exit status.
+  It may play a short sound; inspect the printed 4/4 result as well as exit status.
+  On macOS/Linux, `SDL_AUDIODRIVER=dummy ./anybandui-sound-tests -v` exercises
+  the SDL2 backend without a physical audio device. The sound CI workflow runs
+  these checks and the map/message tests on Ubuntu and macOS. Dummy audio checks
+  do not establish that speakers or device selection work on a particular machine.
 
 ## Recorded baseline
 
@@ -31,6 +35,11 @@ unverified. Several earlier helpers and the transport/object-pile targets were
 affected by an unresolved Bitdefender quarantine. Broken wrappers depending on
 those missing helpers have been removed; they were not recreated or bypassed.
 
-Windows is the validated platform. Other platforms, long campaigns and future
-engine revisions require additional validation. Historical prototypes and their
+The macOS/Linux sound changes were checked on 29 September 2026 with a fresh
+Ubuntu 24.04 container build: map 5/5, SDL2 sound 4/4 and message 11/11 passed
+using `SDL_AUDIODRIVER=dummy`. The normal Windows release script also passed,
+followed by sound 4/4 and message 11/11 in its build workspace. macOS has an
+automated workflow configured but has not been run locally. Audible Linux/macOS
+device playback, long campaigns and future engine revisions require additional
+validation. Historical prototypes and their
 reports are available in Git history, not as evidence for the current build.

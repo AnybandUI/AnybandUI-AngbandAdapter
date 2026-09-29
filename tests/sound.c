@@ -1,4 +1,4 @@
-/* Real-device checks for Angband's official Windows backend. May play a short sound. */
+/* Official backend checks. SDL_AUDIODRIVER=dummy enables headless SDL2 tests. */
 #include "angband.h"
 #include "unit-test.h"
 #include "test-utils.h"
@@ -7,7 +7,16 @@
 #include "option.h"
 #include "player.h"
 #include "sound.h"
+#ifdef SOUND_SDL2
+#include "snd-sdl.h"
+#include "SDL.h"
+#define SOUND_BACKEND "sdl"
+#define init_backend init_sound_sdl
+#else
 #include "snd-win.h"
+#define SOUND_BACKEND "win"
+#define init_backend init_sound_win
+#endif
 #include "ui-prefs.h"
 
 static struct sound_hooks backend;
@@ -19,7 +28,7 @@ int setup_tests(void **state)
     init_angband();
     textui_prefs_init();
     *state = NULL;
-    return init_sound_win(&backend, 0, NULL);
+    return init_backend(&backend, 0, NULL);
 }
 
 int teardown_tests(void *state)
@@ -58,14 +67,31 @@ static int test_missing_file(void *state)
     ok;
 }
 
+static int test_empty_restart(void *state)
+{
+    for (int i = 0; i < 2; ++i) {
+        eq(init_sound(SOUND_BACKEND, 0, NULL), 0);
+        require(is_sound_inited());
+        close_sound();
+        close_sound();
+        require(!is_sound_inited());
+#ifdef SOUND_SDL2
+        eq(SDL_WasInit(SDL_INIT_AUDIO), 0);
+#endif
+    }
+    ok;
+}
+
 static int test_preferences_and_restart(void *state)
 {
     int i;
     for (i = 0; i < 2; ++i) {
-        eq(init_sound("win", 0, NULL), 0);
+        eq(init_sound(SOUND_BACKEND, 0, NULL), 0);
         require(process_pref_file("sound.prf", false, false));
         require(is_sound_inited());
         player->opts.opt[OPT_use_sound] = false;
+        sound(MSG_EAT);
+        player->opts.opt[OPT_use_sound] = true;
         sound(MSG_EAT);
         close_sound();
         require(!is_sound_inited());
@@ -80,6 +106,7 @@ const char *suite_name = "adapter/sound";
 struct test tests[] = {
     { "official MP3 load/play/unload", test_mp3 },
     { "missing sample", test_missing_file },
+    { "startup without samples and repeated close", test_empty_restart },
     { "official preferences and restart", test_preferences_and_restart },
     { NULL, NULL }
 };

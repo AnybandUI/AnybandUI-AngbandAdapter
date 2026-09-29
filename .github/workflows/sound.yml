@@ -1,0 +1,39 @@
+name: Native sound
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  sound:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build pkg-config libsdl2-dev libsdl2-mixer-dev
+      - name: macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install ninja pkg-config sdl2 sdl2_mixer
+      - name: Prepare engine
+        run: |
+          git clone https://github.com/angband/angband.git build/upstream
+          python -B tools/prepare.py --repository build/upstream
+      - name: Build
+        run: |
+          cmake -S build/engine -B build/native -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DANGBAND_EXTERNAL_FRONTEND="$PWD" -DSUPPORT_BORG=OFF -DSUPPORT_SPOIL_FRONTEND=OFF
+          cmake --build build/native --parallel 3 --target OurExecutable anybandui-map-tests anybandui-sound-tests unittest-message-message
+      - name: Check native pass totals
+        working-directory: build/native/game
+        env:
+          SDL_AUDIODRIVER: dummy
+        run: |
+          ./anybandui-map-tests -v | tee map.log
+          grep -q '5/5 passed' map.log
+          ./anybandui-sound-tests -v | tee sound.log
+          grep -q '4/4 passed' sound.log
+          ../unittests/message/message/message -v | tee message.log
+          grep -q '11/11 passed' message.log
