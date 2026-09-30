@@ -27,7 +27,7 @@ class PackageTests(unittest.TestCase):
         for name in packager.SOURCE_FILES:
             self.write(self.adapter / name, "source " + name)
         for name in ("src/main.c", "tests/map.c", "tools/prepare.py",
-                     "patches/series", "docs/angband-copying.rst", "vendor/cjson/LICENSE"):
+                     "docs/angband-copying.rst", "vendor/cjson/LICENSE"):
             self.write(self.adapter / name, "maintained " + name)
         for name in ("recovery/private.zip", "experiments/old.c", "local-notes.txt",
                      "build/debug.pdb", "dist/old.zip", ".git/config", "src/__pycache__/old.pyc"):
@@ -54,7 +54,8 @@ class PackageTests(unittest.TestCase):
         with zipfile.ZipFile(output / "source.zip") as archive:
             names = set(archive.namelist())
             self.assertIn("adapter/src/main.c", names)
-            self.assertIn("adapter/patches/series", names)
+            self.assertIn("adapter/upstream.json", names)
+            self.assertFalse(any(name.startswith("adapter/patches/") for name in names))
             self.assertIn("adapter/vendor/cjson/LICENSE", names)
             self.assertIn("angband/src/game.c", names)
             self.assertIn("angband/lib/gamedata/constants.txt", names)

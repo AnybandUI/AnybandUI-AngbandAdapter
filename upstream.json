@@ -1,5 +1,5 @@
 {
-  "repository": "https://github.com/angband/angband.git",
-  "ref": "4.2-release",
-  "commit": "f3082213b73f3e463e3d0d60bff4b00462beae6e"
+  "repository": "https://github.com/AnybandUI/angband.git",
+  "ref": "4.2.6-anybandui",
+  "commit": "1a04bb9256f42b17e4f6ad5a0705af048bccb796"
 }

@@ -4,8 +4,9 @@ An Angband-specific implementation of [Anyband Protocol](https://github.com/Anyb
 (`anyband-protocol`). The adapter compiles with the Angband core into one engine
 executable; the desktop UI communicates with it through JSON over stdin/stdout.
 
-The supported engine base is Angband 4.2.6 at the commit pinned in `upstream.json`,
-plus the patches in `patches/series`. This is a source-level integration, not a
+The supported engine is our [Angband branch](https://github.com/AnybandUI/angband/tree/4.2.6-anybandui)
+at the exact commit pinned in `upstream.json`. Its engine changes are maintained
+directly in that branch. This is a source-level integration, not a
 DLL plugin or a stable engine ABI. The save family is `angband-4.2.6`.
 
 ## Build
@@ -20,9 +21,12 @@ cmake -S build/engine -B build/native -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Re
 cmake --build build/native --target OurExecutable anybandui-map-tests
 ```
 
-Preparation exports the pinned commit and applies the patches without changing
-the original checkout. An existing prepared tree is reused only if its recorded
-commit, patches and contents match. Choose another `--source` directory if needed.
+Preparation exports the pinned commit without changing the original checkout.
+Uncommitted engine edits and later branch commits are not included. Update the
+commit in `upstream.json` deliberately when adopting engine changes. An existing
+prepared tree is reused only if its recorded commit and contents match. Choose
+another `--source` directory if needed, including when replacing an older build.
+Use that same source directory for CMake and packaging.
 
 On macOS, install build/audio dependencies with
 `brew install cmake ninja pkg-config sdl2 sdl2_mixer`. On Debian/Ubuntu, install
@@ -80,22 +84,32 @@ Pop-Location
 python -B -m unittest discover -s tests -p "test_*.py"
 ```
 
-Check printed native pass totals as well as exit status. See
-[validation](docs/validation.md) for coverage and outstanding integration checks.
+Check printed native pass totals as well as exit status: Angband's runner can
+exit successfully despite failed assertions. Map checks cover drawing layers,
+occlusion, read-only RNG/monster colour, known-map memory and minimap lighting.
+The Python packaging checks use temporary fixtures and do not exercise gameplay.
+
+Build `anybandui-sound-tests` and run it with `-v` from the build's `game`
+directory to check MP3 playback, missing files, preferences and repeated sound
+startup/shutdown. It may play a short sound. On macOS/Linux, use
+`SDL_AUDIODRIVER=dummy ./anybandui-sound-tests -v` to test without an audio device.
+The sound CI workflow runs sound and map/message checks on Ubuntu and macOS.
+
+These checks do not certify complete live transport or gameplay parity. Test
+save/load, long campaigns and audible device playback separately; a successful
+startup handshake or dummy-audio check does not establish those behaviours.
 
 ## Layout
 
 - `src/`: adapter implementation and presentation policy.
 - `frontend.cmake`: external frontend build entry.
-- `patches/`: engine fixes, interfaces and generic build integration.
 - `anyband-protocol.json`: copy of the frontend-owned contract.
 - `vendor/`: pinned cJSON dependency and license.
 - `tests/`: native map and packaging regression tests.
-- `tools/`: source preparation, patch export and packaging.
+- `tools/`: source preparation and packaging.
 
 [Architecture](docs/architecture.md) describes ownership and engine dependencies.
-Retired prototypes and historical cleanup reports remain in Git history; they are
-not part of the supported build. Build output and recovery backups are ignored.
+Build output and recovery backups are ignored.
 
 GPLv2. Angband retains its licensing; cJSON is MIT-licensed. See `LICENSE`,
 `docs/angband-copying.rst` and `vendor/cjson/LICENSE`.

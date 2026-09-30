@@ -22,7 +22,7 @@ one game session. The UI receives scalar snapshots and identifiers, never pointe
 Request revisions, prompt contexts and item handles reject stale interactions.
 
 The engine interface is source-version-specific. Updates to the pinned Angband
-revision require reviewing both adapter dependencies and the engine patch series.
+revision require reviewing both adapter dependencies and the engine changes.
 The independently versioned Anyband Protocol belongs to AnybandUI; every listed
 capability is required.
 
@@ -49,9 +49,11 @@ Tuning validation temporarily publishes parser output and restores the live poin
 equipment comparisons also depend on careful state restoration. These operations
 are synchronous and are not thread-safe or independent of the engine version.
 
-## Engine patches
+## Engine source
 
-Apply `patches/series` in order to the commit in `upstream.json`:
+Engine changes live in the `4.2.6-anybandui` branch of `AnybandUI/angband`.
+`upstream.json` pins the exact commit exported by `tools/prepare.py`; there is no
+patch application step. The branch contains:
 
 1. Correctness fixes: object-power arithmetic, cancelled purchase cleanup,
    confused mouse movement and the MSVC UTF-8 option.
@@ -67,6 +69,6 @@ samples and the character's `use_sound` option. No audio protocol events or
 AnybandUI playback subsystem are involved. The original Windows frontend uses
 the same extracted backend.
 
-`tools/export_patches.py` regenerates this series and `docs/surface.json` from an
-explicitly prepared engine tree. Measurements compare with the pinned upstream
-release. They do not include adapter-owned implementation files.
+Commit engine changes in the Angband repository, then update `upstream.json`
+to that commit and validate the adapter against a fresh source export. Release
+packages include the exact exported engine source for offline rebuilding.

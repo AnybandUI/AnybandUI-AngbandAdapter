@@ -7,7 +7,7 @@ import shutil
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_DIRS = ("src", "tests", "tools", "patches", "vendor", "docs")
+SOURCE_DIRS = ("src", "tests", "tools", "vendor", "docs")
 SOURCE_FILES = (".clang-format", ".gitignore", "LICENSE", "README.md",
                 "frontend.cmake", "engine.anyband.json.in", "anyband-protocol.json", "upstream.json")
 
